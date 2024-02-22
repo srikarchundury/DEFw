@@ -670,6 +670,8 @@ class Suites(MethodInterceptor):
 	def __init__(self, path, suite_prefix='suite_', prefix="", disabled_methods=[]):
 		# iterate over the test scripts directory and generate
 		# An internal database
+		global defw_path
+
 		super().__init__(self, disabled_methods)
 		self.test_db = {}
 		self.__prefix = prefix
@@ -679,7 +681,7 @@ class Suites(MethodInterceptor):
 		self.__disabled_methods = disabled_methods
 		self.suite_prefix = suite_prefix
 		if not os.path.isdir(self.suites_path):
-			raise IFWError('No tests suites directory: ' + self.suites_path)
+			raise IFWError('No tests suites directory: ' + self.suites_path + ' global path: ' + defw_path)
 		self.generate_test_db(self.test_db)
 
 	def __getitem__(self, key):
@@ -1096,6 +1098,7 @@ def configure_defw():
 
 	try:
 		config = os.environ['DEFW_CONFIG_PATH']
+		defw_path = os.environ['DEFW_PATH']
 	except:
 		defw_path = os.getcwd()
 		config = os.path.join(defw_path, "python", "config", "defw.yaml")

@@ -49,8 +49,8 @@
 
 #define DEFAULT_MASTER_PORT	8282
 
-/* Intersect Framework Environment Variables needed from C */
-#define IFW_PATH 		"IFW_PATH" /* base installation path */
+/* Framework Environment Variables needed from C */
+#define DEFW_PATH 		"DEFW_PATH" /* base installation path */
 
 #ifndef _UUID_UUID_H
 typedef unsigned char uuid_t[16];

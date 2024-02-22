@@ -34,6 +34,43 @@ defw_rc_t defw_start(int argc, char *argv[], bool daemon)
 	pthread_t l_thread_id;
 	defw_rc_t rc;
 
+	if (daemon) {
+		pid_t process_id = 0;
+		pid_t sid = 0;
+
+		/* create the child process */
+		process_id = fork();
+		if (process_id < 0) {
+			PERROR("Failed to run defw as deamon");
+			return EN_DEFW_RC_ERR_THREAD_STARTUP;
+		}
+
+		if (process_id > 0) {
+			/*
+			 * We're in the parent process so let's kill it
+			 * off
+			 */
+			PDEBUG("Shutting down parent process");
+			exit(DEFW_EXIT_NORMAL);
+		}
+
+		umask(0);
+		sid = setsid();
+		if (sid < 0) {
+			PERROR("forking child failed");
+			return EN_DEFW_RC_ERR_THREAD_STARTUP;
+		}
+
+		rc = chdir("/");
+		close(STDIN_FILENO);
+		close(STDOUT_FILENO);
+		close(STDERR_FILENO);
+		if (rc) {
+			PERROR("chdir failed");
+			return EN_DEFW_RC_ERR_THREAD_STARTUP;
+		}
+	}
+
 	memset(&g_defw_cfg, 0, sizeof(g_defw_cfg));
 
 	pthread_spin_init(&log_spin_lock, PTHREAD_PROCESS_PRIVATE);
@@ -88,41 +125,6 @@ defw_rc_t defw_start(int argc, char *argv[], bool daemon)
 		 */
 		defw_shutdown();
 		return rc;
-	} else if (g_defw_cfg.shell == EN_DEFW_RUN_DAEMON) {
-		pid_t process_id = 0;
-		pid_t sid = 0;
-
-		/* create the child process */
-		process_id = fork();
-		if (process_id < 0) {
-			PERROR("Failed to run defw as deamon");
-			return EN_DEFW_RC_ERR_THREAD_STARTUP;
-		}
-
-		if (process_id > 0) {
-			/*
-			 * We're in the parent process so let's kill it
-			 * off
-			 */
-			PDEBUG("Shutting down parent process");
-			exit(DEFW_EXIT_NORMAL);
-		}
-
-		umask(0);
-		sid = setsid();
-		if (sid < 0) {
-			PERROR("forking child failed");
-			return EN_DEFW_RC_ERR_THREAD_STARTUP;
-		}
-
-		rc = chdir("/");
-		close(STDIN_FILENO);
-		close(STDOUT_FILENO);
-		close(STDERR_FILENO);
-		if (rc) {
-			PERROR("chdir failed");
-			return EN_DEFW_RC_ERR_THREAD_STARTUP;
-		}
 	}
 
 	if (!g_defw_cfg.initialized) {

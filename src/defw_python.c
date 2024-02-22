@@ -40,9 +40,9 @@ defw_rc_t python_exec(char *code)
 
 static defw_rc_t python_setup(void)
 {
-	char buf[MAX_STR_LEN + 20];
+	char buf[MAX_STR_LEN * 4];
 	char cwd[MAX_STR_LEN];
-	char *infra = getenv(IFW_PATH);
+	char *infra = getenv(DEFW_PATH);
 
 	if (!infra) {
 		if (getcwd(cwd, sizeof(cwd)) != NULL) {
@@ -58,13 +58,27 @@ static defw_rc_t python_setup(void)
 	RUN_PYTHON_CMD("import os\n");
 	RUN_PYTHON_CMD("import sys\n");
 	RUN_PYTHON_CMD("import readline\n");
-
+	snprintf(buf, sizeof(buf),
+		"import sys\n"
+		"import traceback\n"
+		"def log_exception(exc_type, exc_value, exc_traceback):\n"
+		"    with open('/tmp/ashehata', 'a') as f:\n"
+		"        f.write(f\"Exception Type: {exc_type}\\n\")\n"
+		"        f.write(f\"Exception Value: {exc_value}\\n\")\n"
+		"        f.write(\"Traceback:\\n\")\n"
+		"        f.writelines(traceback.format_exception(exc_type, exc_value, exc_traceback))\n"
+		"sys.excepthook = log_exception");
+	RUN_PYTHON_CMD(buf);
 	/* all other paths are figured out within python */
 	snprintf(buf, sizeof(buf),
 		"sys.path.append(os.path.join('%s', 'python', 'infra'))", infra);
 	RUN_PYTHON_CMD(buf);
 	snprintf(buf, sizeof(buf),
 		"sys.path.append(os.path.join('%s', 'src'))", infra);
+	RUN_PYTHON_CMD(buf);
+
+	snprintf(buf, sizeof(buf),
+		 "f = open('/tmp/ashehata', 'a'); f.write(str(sys.path)); f.close()");
 	RUN_PYTHON_CMD(buf);
 
 	RUN_PYTHON_CMD("import defw\n");
