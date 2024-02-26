@@ -5,8 +5,8 @@ from defw_agent import Endpoint
 from defw import me, active_service_agents, active_client_agents, \
 					service_agents, client_agents
 from defw_agent_baseapi import BaseAgentAPI
-from defw_exception import IFWError,IFWCommError,IFWAgentNotFound,\
-						  IFWInternalError,IFWRemoteError,IFWReserveError
+from defw_exception import DEFwError,DEFwCommError,DEFwAgentNotFound,\
+						  DEFwInternalError,DEFwRemoteError,DEFwReserveError
 from defw_util import prformat, fg, bg
 import logging, uuid
 
@@ -21,20 +21,20 @@ AGENT_STATE_UNREGISTERED = 1 << 2
 # Agent is in error state
 AGENT_STATE_ERROR = 1 << 3
 
-class IResMgr:
+class DEFwResMgr:
 	SVC = 'services'
 	ACTV_SVC = 'active services'
 	CLT = 'clients'
 	ACTV_CLT = 'active clients'
-	def __init__(self):
+	def __init__(self, sql_path):
 		self.__services_db = {}
 		self.__clients_db = {}
 		self.__active_services_db = {}
 		self.__active_clients_db = {}
-		self.__dbs = {IResMgr.SVC: self.__services_db,
-					  IResMgr.ACTV_SVC: self.__active_services_db,
-					  IResMgr.CLT: self.__clients_db,
-					  IResMgr.ACTV_CLT: self.__active_clients_db}
+		self.__dbs = {DEFwResMgr.SVC: self.__services_db,
+					  DEFwResMgr.ACTV_SVC: self.__active_services_db,
+					  DEFwResMgr.CLT: self.__clients_db,
+					  DEFwResMgr.ACTV_CLT: self.__active_clients_db}
 		self.__my_ep = me.my_endpoint()
 		self.__reload_resources()
 
@@ -69,7 +69,7 @@ class IResMgr:
 			if ep.name in agent_dict:
 				agent_dict[ep.name]['state'] = \
 					agent_dict[ep.name]['state'] | AGENT_STATE_ERROR
-			IFWAgentNotFound(f"Registeration from an unknown client {ep.name}")
+			DEFwAgentNotFound(f"Registeration from an unknown client {ep.name}")
 		self.__grab_agent_info({agent.get_name(): agent},
 				agent_dict, skep_self=True)
 		agent_dict[agent.get_name()]['state'] = \
@@ -86,7 +86,7 @@ class IResMgr:
 		None
 
 	Raises:
-		IFWCommError: If Resource Manager is not reachable
+		DEFwCommError: If Resource Manager is not reachable
 	"""
 	def register_client(self, ep):
 		self.__register(client_agents, self.__clients_db, ep)
@@ -101,7 +101,7 @@ class IResMgr:
 		agent: An agent class instance which references the service
 
 	Raises:
-		IFWCommError: If Resource Manager is not reachable
+		DEFwCommError: If Resource Manager is not reachable
 	"""
 	def register_service(self, service_ep):
 		self.__register(service_agents, self.__services_db, ep)
@@ -116,13 +116,13 @@ class IResMgr:
 		None
 
 	Raises:
-		IFWCommError: If Resource Manager is not reachable
-		IFWAgentNotFound: If agent is not registered
+		DEFwCommError: If Resource Manager is not reachable
+		DEFwAgentNotFound: If agent is not registered
 	"""
 	def deregister(self, ep):
 		if ep.name not in self.__clients_db and \
 		   ep.name not in self.__services_db:
-			   raise IFWAgentNotFound(f"agent {ep.name} not found")
+			   raise DEFwAgentNotFound(f"agent {ep.name} not found")
 		if ep.name in self__services_db:
 			self.__services_db[ep.name]['api'].unregister()
 			del self.__services_db[ep.name]
@@ -132,7 +132,7 @@ class IResMgr:
 		return
 
 	"""
-	List all available Agents in the Intersect Network
+	List all available Agents in the DEFw Network
 
 	Args:
 		service_filter: a string to filter services on
@@ -141,7 +141,7 @@ class IResMgr:
 		dict: dictionary of services available on each agent
 
 	Raises:
-		IFWCommError: If Resource Manager is not reachable
+		DEFwCommError: If Resource Manager is not reachable
 	"""
 	def get_services(self, service_filter=None):
 		services = {}
@@ -151,19 +151,19 @@ class IResMgr:
 				continue
 			s =  v['info'].get_services(service_filter)
 			if len(s) > 0:
-				services[k] = {'loc': IResMgr.ACTV_SVC, 'services': s,
+				services[k] = {'loc': DEFwResMgr.ACTV_SVC, 'services': s,
 							   'api': v['info'].get_name()}
 		for k, v in self.__services_db.items():
 			if not v['info']:
 				continue
 			s =  v['info'].get_services(service_filter)
 			if len(s) > 0:
-				services[k] = {'loc': IResMgr.SVC, 'services': s,
+				services[k] = {'loc': DEFwResMgr.SVC, 'services': s,
 							   'api': v['info'].get_name()}
 		return services
 
 	"""
-	Reserve an Agent which exists on the Intersect Network
+	Reserve an Agent which exists on the DEFw Network
 
 	Args:
 		servics (dict): Dictionary of services to reserve
@@ -172,15 +172,15 @@ class IResMgr:
 		endpoint list of all services reserved
 
 	Raises:
-		IFWCommError: If Resource Manager is not reachable
-		IFWReserveError: If there is an error in the reservation process
+		DEFwCommError: If Resource Manager is not reachable
+		DEFwReserveError: If there is an error in the reservation process
 	"""
 	def reserve(self, client_ep, services, *args, **kwargs):
 		svc_eps = []
 		for k, v in services.items():
 			db = self.__dbs[v['loc']]
 			if not db[k]['state'] & AGENT_STATE_REGISTERED:
-				IFWReserveError(f"Agent {k} is not registered")
+				DEFwReserveError(f"Agent {k} is not registered")
 			for s in v['services']:
 				s.consume_capacity()
 			logging.debug(f"reserve - {k}, {v}")
@@ -188,7 +188,7 @@ class IResMgr:
 			try:
 				api.reserve(db[k]['info'], v['services'], client_ep, *args, **kwargs)
 			except Exception as e:
-				raise IFWReserveError(str(e))
+				raise DEFwReserveError(str(e))
 			ep = db[k]['agent'].get_ep()
 			# if this is a remote endpoint we should NULL out the blk_uuid
 			# because it wouldn't mean anything here.
@@ -208,13 +208,13 @@ class IResMgr:
 		None
 
 	Raises:
-		IFWCommError: If Resource Manager is not reachable
-		IFWReserveError: If there is an error in the release process
+		DEFwCommError: If Resource Manager is not reachable
+		DEFwReserveError: If there is an error in the release process
 	"""
 	def release(self, services):
 		for k, v in services.items():
 			if not self.__services_db[k]['state'] & AGENT_STATE_REGISTERED:
-				IFWReserveError(f"Agent {f} is not registered")
+				DEFwReserveError(f"Agent {f} is not registered")
 			for s in v['services']:
 				s.release_capacity()
 			logging.debug(f"release - {k}, {v}")
@@ -222,7 +222,7 @@ class IResMgr:
 			try:
 				api.release()
 			except Exception as e:
-				raise IFWReserveError(str(e))
+				raise DEFwReserveError(str(e))
 
 	def query(self):
 		prformat(fg.bold+fg.lightgrey+bg.red, "Resmgr doesn't implement QUERY API")

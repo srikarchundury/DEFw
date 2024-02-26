@@ -1,5 +1,5 @@
-#ifndef LIBIFW_AGENT_H
-#define LIBIFW_AGENT_H
+#ifndef LIBDEFW_AGENT_H
+#define LIBDEFW_AGENT_H
 
 #include <stdbool.h>
 #include "defw_agent.h"
@@ -88,4 +88,4 @@ void defw_active_service_agent_iter(process_agent cb, void *user_data);
 void defw_active_client_agent_iter(process_agent cb, void *user_data);
 void defw_new_agent_iter(process_agent cb, void *user_data);
 
-#endif /* LIBIFW_AGENT_H */
+#endif /* LIBDEFW_AGENT_H */

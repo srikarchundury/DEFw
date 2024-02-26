@@ -2,7 +2,7 @@ from defw_agent_info import *
 from defw_util import prformat, fg, bg
 from defw import me
 import logging, uuid, time, queue, threading, logging
-from defw_exception import IFWError
+from defw_exception import DEFwError
 
 CID_COUNTER = 0
 QCR_VERBOSE = 1
@@ -182,7 +182,7 @@ class IQhpc:
 		import xacc
 		circuit = self.__find_circuit(cid)
 		if not circuit:
-			raise IFWError(f"Got circuit {cid} does not exist in database")
+			raise DEFwError(f"Got circuit {cid} does not exist in database")
 
 		circuit.set_running()
 

@@ -1,4 +1,4 @@
-from defw_baseicpa import BaseRemote
+from defw_remote import BaseRemote
 
 class IQhpc(BaseRemote):
 	def __init__(self, ep):

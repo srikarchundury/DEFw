@@ -86,9 +86,9 @@ static defw_rc_t process_msg_py_request(char *msg, defw_agent_blk_t *agent)
 	char *uuid = calloc(1, UUID_STR_LEN);
 	uuid_unparse_lower(agent->id.blk_uuid, uuid);
 
-	agent->state |= IFW_AGENT_WORK_IN_PROGRESS;
+	agent->state |= DEFW_AGENT_WORK_IN_PROGRESS;
 	rc = python_handle_request(msg, uuid);
-	agent->state &= ~IFW_AGENT_WORK_IN_PROGRESS;
+	agent->state &= ~DEFW_AGENT_WORK_IN_PROGRESS;
 
 	return rc;
 }
@@ -104,9 +104,9 @@ static defw_rc_t process_msg_py_response(char *msg, defw_agent_blk_t *agent)
 	char *uuid = calloc(1, UUID_STR_LEN);
 	uuid_unparse_lower(agent->id.blk_uuid, uuid);
 
-	agent->state |= IFW_AGENT_WORK_IN_PROGRESS;
+	agent->state |= DEFW_AGENT_WORK_IN_PROGRESS;
 	rc = python_handle_response(msg, uuid);
-	agent->state &= ~IFW_AGENT_WORK_IN_PROGRESS;
+	agent->state &= ~DEFW_AGENT_WORK_IN_PROGRESS;
 
 	return rc;
 }
@@ -131,7 +131,7 @@ static defw_rc_t process_msg_session_info(char *msg, defw_agent_blk_t *agent)
 		PDEBUG("Second connection on an existing agent is the RPC connection: %d",
 		       existing->iRpcFd);
 		if (ses->rpc_setup)
-			set_agent_state(existing, IFW_AGENT_RPC_CHANNEL_CONNECTED);
+			set_agent_state(existing, DEFW_AGENT_RPC_CHANNEL_CONNECTED);
 		/* release ref count acquired when you found the agent */
 		defw_release_agent_blk(existing, false);
 		/* agent should never be the same as existing.
@@ -167,9 +167,9 @@ static defw_rc_t process_msg_session_info(char *msg, defw_agent_blk_t *agent)
 	agent->hostname[MAX_STR_LEN-1] = '\0';
 	strncpy(agent->name, ses->node_name, MAX_STR_LEN);
 	agent->name[MAX_STR_LEN-1] = '\0';
-	set_agent_state(agent, IFW_AGENT_CNTRL_CHANNEL_CONNECTED);
-	set_agent_state(agent, IFW_AGENT_STATE_ALIVE);
-	unset_agent_state(agent, IFW_AGENT_STATE_NEW);
+	set_agent_state(agent, DEFW_AGENT_CNTRL_CHANNEL_CONNECTED);
+	set_agent_state(agent, DEFW_AGENT_STATE_ALIVE);
+	unset_agent_state(agent, DEFW_AGENT_STATE_NEW);
 	gettimeofday(&agent->time_stamp, NULL);
 
 	return EN_DEFW_RC_OK;

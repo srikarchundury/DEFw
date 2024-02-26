@@ -1,10 +1,10 @@
-from defw_baseicpa import BaseRemote
+from defw_remote import BaseRemote
 
 """
 Interface module for the Resource Manager
 """
 
-class IResMgr(BaseRemote):
+class DEFwResMgr(BaseRemote):
 	def __init__(self, ep):
 		super().__init__(target=ep)
 
@@ -18,7 +18,7 @@ class IResMgr(BaseRemote):
 		None
 
 	Raises:
-		IFWCommError: If Resource Manager is not reachable
+		DEFwCommError: If Resource Manager is not reachable
 	"""
 	def register_client(self, client_ep):
 		pass
@@ -33,7 +33,7 @@ class IResMgr(BaseRemote):
 		agent: An agent class instance which references the service
 
 	Raises:
-		IFWCommError: If Resource Manager is not reachable
+		DEFwCommError: If Resource Manager is not reachable
 	"""
 	def register_service(self, service_ep):
 		pass
@@ -48,14 +48,14 @@ class IResMgr(BaseRemote):
 		None
 
 	Raises:
-		IFWCommError: If Resource Manager is not reachable
-		IFWAgentNotFound: If agent is not registered
+		DEFwCommError: If Resource Manager is not reachable
+		DEFwAgentNotFound: If agent is not registered
 	"""
 	def deregister(self, agent_ep):
 		pass
 
 	"""
-	List all available Agents in the Intersect Network
+	List all available Agents in the DEFw Network
 
 	Args:
 		service_filter: a string to filter services on
@@ -64,13 +64,13 @@ class IResMgr(BaseRemote):
 		dict: dictionary of services available on each agent
 
 	Raises:
-		IFWCommError: If Resource Manager is not reachable
+		DEFwCommError: If Resource Manager is not reachable
 	"""
 	def get_services(self, service_filter=None):
 		pass
 
 	"""
-	Reserve an Agent which exists on the Intersect Network
+	Reserve an Agent which exists on the DEFw Network
 
 	Args:
 		servics (dict): Dictionary of services to reserve
@@ -79,8 +79,8 @@ class IResMgr(BaseRemote):
 		None
 
 	Raises:
-		IFWCommError: If Resource Manager is not reachable
-		IFWReserveError: If there is an error in the reservation process
+		DEFwCommError: If Resource Manager is not reachable
+		DEFwReserveError: If there is an error in the reservation process
 	"""
 	def reserve(self, services):
 		pass
@@ -95,8 +95,8 @@ class IResMgr(BaseRemote):
 		None
 
 	Raises:
-		IFWCommError: If Resource Manager is not reachable
-		IFWReserveError: If there is an error in the release process
+		DEFwCommError: If Resource Manager is not reachable
+		DEFwReserveError: If there is an error in the release process
 	"""
 	def release(self, agents):
 		pass

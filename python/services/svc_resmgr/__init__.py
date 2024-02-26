@@ -11,7 +11,7 @@ svc_info = {'name': 'Resource Manager', 'version': 1.0}
 #	query()
 #	reserve()
 #	release()
-service_classes = [IResMgr]
+service_classes = [DEFwResMgr]
 
 def initialize():
 	# Initialize the service. EX: start threads/processes, etc

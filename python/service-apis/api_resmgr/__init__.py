@@ -4,7 +4,7 @@ from .api_resmgr import *
 # This is used by the infrastructure to display information about
 # the service module
 svc_info = {'name': 'Resource Manager',
-			'description': 'Intersect Framework Resource Manager',
+			'description': 'DEFw Framework Resource Manager',
 			'version': 1.0}
 
 # This is used by the infrastructure to define all the service classes.
@@ -13,7 +13,7 @@ svc_info = {'name': 'Resource Manager',
 #	query()
 #	reserve()
 #	release()
-service_classes = [IResMgr]
+service_classes = [DEFwResMgr]
 
 def initialize():
 	pass

@@ -2,11 +2,11 @@ from pathlib import Path
 from cdefw_agent import *
 from defw_common_def import *
 import defw_common_def as common
-from defw_exception import IFWError, IfwDumper
+from defw_exception import DEFwError, DEFwDumper
 from defw_cmd import defw_exec_local_cmd
 import importlib, socket
 import cdefw_global
-from defw_agent import IfwClientAgents, IfwServiceAgents, IfwActiveClientAgents, IfwActiveServiceAgents, Endpoint
+from defw_agent import DEFwClientAgents, DEFwServiceAgents, DEFwActiveClientAgents, DEFwActiveServiceAgents, Endpoint
 import netifaces
 import os, subprocess, sys, yaml, fnmatch, logging, csv, uuid
 import shutil, traceback, datetime, re, copy, threading, queue, time
@@ -37,10 +37,10 @@ g_keywords = {'DATE': get_today,
 			  'YNEAR': get_nearest_yaml_block,
 			  'YTOP': get_top_yaml_block}
 
-class IfwYaml:
+class DEFwYaml:
 	def __init__(self, y=None):
 		if y is not None and (type(y) is not dict and type(y) is not list):
-			raise IFWError('This class takes dictionaries or lists only')
+			raise DEFwError('This class takes dictionaries or lists only')
 		self.__yaml = y
 
 	def get(self):
@@ -51,7 +51,7 @@ class IfwYaml:
 
 	def load(self, stream):
 		if self.__yaml:
-			raise IFWError('There exists a YAML instance')
+			raise DEFwError('There exists a YAML instance')
 		self.__yaml = yaml.load(stream, Loader=yaml.FullLoader)
 
 	def unload(self):
@@ -67,10 +67,10 @@ class YamlResults:
 		for i, e in enumerate(self.__results):
 			if e.get()['name'] == key:
 				value['name'] = key
-				self.__results[i] = IfwYaml(value)
+				self.__results[i] = DEFwYaml(value)
 				return
 		value['name'] = key
-		self.__results.append(IfwYaml(value))
+		self.__results.append(DEFwYaml(value))
 		self.__max = len(self.__results)
 
 	def __getitem__(self, key):
@@ -355,7 +355,7 @@ class Script(MethodInterceptor):
 				else:
 					# if the script went out of its way to say I want to halt all execution
 					# then honor that.
-					if type(e) == IFWError and e.halt:
+					if type(e) == DEFwError and e.halt:
 						raise e
 					else:
 						logging.critical("Initializing %s failed" % str(self.name))
@@ -386,7 +386,7 @@ class Script(MethodInterceptor):
 			else:
 				# if the script went out of its way to say I want to halt all execution
 				# then honor that.
-				if type(e) == IFWError and e.halt:
+				if type(e) == DEFwError and e.halt:
 					raise e
 				else:
 					rc = {'status': 'FAIL', 'error': traceback.format_exc()}
@@ -433,7 +433,7 @@ class Collection(MethodInterceptor):
 		try:
 			rc = self.__test_db[key]
 		except:
-			raise IFWError('no entry for ' + str(key))
+			raise DEFwError('no entry for ' + str(key))
 		return rc
 
 	def __iter__(self):
@@ -545,7 +545,7 @@ class Collection(MethodInterceptor):
 				else:
 					scripts_dict['scripts'].append(k)
 		scripts_dict['scripts'].sort()
-		print(yaml.dump(scripts_dict, Dumper=IfwDumper, indent=2, sort_keys=True))
+		print(yaml.dump(scripts_dict, Dumper=DEFwDumper, indent=2, sort_keys=True))
 
 	def get_suite_name(self):
 		return self.__suite_name
@@ -556,7 +556,7 @@ class Collection(MethodInterceptor):
 class SuiteCallbacks:
 	def __init__(self, **kwargs):
 		if type(kwargs) is not dict:
-			raise IFWError("Must specify a dictionary")
+			raise DEFwError("Must specify a dictionary")
 		self.__callbacks = kwargs
 	def __contains__(self, key):
 		return key in self.__callbacks
@@ -564,10 +564,10 @@ class SuiteCallbacks:
 		try:
 			rc = self.__callbacks[key]
 		except:
-			raise IFWError('no entry for ' + str(key))
+			raise DEFwError('no entry for ' + str(key))
 		return rc
 	def dump(self):
-		print(yaml.dump(self.__callbacks, Dumper=IfwDumper, indent=2, sort_keys=True))
+		print(yaml.dump(self.__callbacks, Dumper=DEFwDumper, indent=2, sort_keys=True))
 
 class ASuite(MethodInterceptor):
 	def __init__(self, base, name, prefix, disabled_methods):
@@ -682,14 +682,14 @@ class Suites(MethodInterceptor):
 		self.__disabled_methods = disabled_methods
 		self.suite_prefix = suite_prefix
 		if not os.path.isdir(self.suites_path):
-			raise IFWError('No tests suites directory: ' + self.suites_path + ' global path: ' + defw_path)
+			raise DEFwError('No tests suites directory: ' + self.suites_path + ' global path: ' + defw_path)
 		self.generate_test_db(self.test_db)
 
 	def __getitem__(self, key):
 		try:
 			rc = self.test_db[key]
 		except:
-			raise IFWError('no entry for ' + str(key))
+			raise DEFwError('no entry for ' + str(key))
 		return rc
 
 	def __iter__(self):
@@ -771,7 +771,7 @@ class Suites(MethodInterceptor):
 			if fnmatch.fnmatch(k, match):
 				suites_dict['suites'].append(k)
 		suites_dict['suites'].sort()
-		print(yaml.dump(suites_dict, Dumper=IfwDumper, indent=2, sort_keys=True))
+		print(yaml.dump(suites_dict, Dumper=DEFwDumper, indent=2, sort_keys=True))
 
 class ICPASuites(Suites):
 	def __init__(self):
@@ -1014,10 +1014,10 @@ def dumpGlobalTestResults(fname=None, status=None, desc=None):
 			fpath = os.path.join(cdefw_global.get_defw_tmp_dir(), fname)
 		with open(fpath, 'w') as f:
 			f.write(yaml.dump(results,
-				Dumper=IfwDumper, indent=2,
+				Dumper=DEFwDumper, indent=2,
 				sort_keys=False))
 	else:
-		print(yaml.dump(results, Dumper=IfwDumper, indent=2, sort_keys=False))
+		print(yaml.dump(results, Dumper=DEFwDumper, indent=2, sort_keys=False))
 
 def setup_paths():
 	global defw_tmp_dir
@@ -1159,7 +1159,7 @@ def configure_defw():
 			except:
 				cdefw_global.set_log_level(EN_LOG_LEVEL_ERROR)
 	else:
-		raise IFWError('Failed to find a configuration (%s) file. Aborting' % config)
+		raise DEFwError('Failed to find a configuration (%s) file. Aborting' % config)
 
 	return cy
 
@@ -1216,10 +1216,10 @@ if not cdefw_global.get_defw_initialized():
 	# Access functions can be used to dump it.
 	global_test_results = YamlGlobalTestResults()
 
-	client_agents = IfwClientAgents()
-	service_agents = IfwServiceAgents()
-	active_client_agents = IfwActiveClientAgents()
-	active_service_agents = IfwActiveServiceAgents()
+	client_agents = DEFwClientAgents()
+	service_agents = DEFwServiceAgents()
+	active_client_agents = DEFwActiveClientAgents()
+	active_service_agents = DEFwActiveServiceAgents()
 
 	# Create an instance of the resource manager because we have
 	# a connection to it.
@@ -1237,7 +1237,11 @@ if not cdefw_global.get_defw_initialized():
 
 	if me.is_resmgr():
 		if 'Resource Manager' in services:
-			resmgr = services['Resource Manager'].service_classes[0]()
+			if 'DEFW_SQL_PATH' in os.environ:
+				sql_path = os.enviorn['DEFW_SQL_PATH']
+			else:
+				sql_path = '/tmp'
+			resmgr = services['Resource Manager'].service_classes[0](sql_path)
 
 	# Convenience Variables
 	R = dumpGlobalTestResults

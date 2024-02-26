@@ -169,7 +169,7 @@ int defw_agent_uuid_compare(char *agent_id1, char *agent_id2)
 
 static void del_dead_agent_locked(defw_agent_blk_t *agent)
 {
-	assert(agent && agent->state & IFW_AGENT_STATE_DEAD);
+	assert(agent && agent->state & DEFW_AGENT_STATE_DEAD);
 
 	assert(agent->ref_count > 0);
 	agent->ref_count--;
@@ -198,7 +198,7 @@ static inline bool defw_agent_alive(defw_agent_blk_t *agent)
 	bool viable = false;
 
 	MUTEX_LOCK(&agent->state_mutex);
-	if (agent->state & IFW_AGENT_STATE_ALIVE)
+	if (agent->state & DEFW_AGENT_STATE_ALIVE)
 		viable = true;
 	MUTEX_UNLOCK(&agent->state_mutex);
 
@@ -240,30 +240,30 @@ void defw_release_agent_blk_unlocked(defw_agent_blk_t *agent, int dead)
 	agent->ref_count--;
 
 	/* if the agent isn't alive and isn't new then it must be dead */
-	if (agent->state & IFW_AGENT_STATE_DEAD) {
+	if (agent->state & DEFW_AGENT_STATE_DEAD) {
 		del_dead_agent_locked(agent);
 		return;
 	}
 
 	if (agent->ref_count == 0) {
 		dlist_remove(&agent->entry);
-		assert(!(agent->state & IFW_AGENT_WORK_IN_PROGRESS));
+		assert(!(agent->state & DEFW_AGENT_WORK_IN_PROGRESS));
 		/* a new agent represents a connection which we don't
 		 * exactly know if it's from an agent we have previous
 		 * connections from. If it is a new connection, then we
 		 * don't want to close that connection after we've
 		 * transferred it to the agent we already have.
 		 */
-		if (!(agent->state & IFW_AGENT_STATE_NEW) || dead)
+		if (!(agent->state & DEFW_AGENT_STATE_NEW) || dead)
 			close_agent_connection_unlocked(agent);
 		memset(agent, 0xdeadbeef, sizeof(*agent));
 		free(agent);
 	} else if (dead) {
 		/* remove from the live list and put on the dead list */
-		set_agent_state(agent, IFW_AGENT_STATE_DEAD);
-		unset_agent_state(agent, IFW_AGENT_STATE_ALIVE);
-		unset_agent_state(agent, IFW_AGENT_RPC_CHANNEL_CONNECTED);
-		unset_agent_state(agent, IFW_AGENT_CNTRL_CHANNEL_CONNECTED);
+		set_agent_state(agent, DEFW_AGENT_STATE_DEAD);
+		unset_agent_state(agent, DEFW_AGENT_STATE_ALIVE);
+		unset_agent_state(agent, DEFW_AGENT_RPC_CHANNEL_CONNECTED);
+		unset_agent_state(agent, DEFW_AGENT_CNTRL_CHANNEL_CONNECTED);
 		dlist_remove(&agent->entry);
 		dlist_insert_tail(&agent->entry, &agent_dead_list);
 		close_agent_connection_unlocked(agent);
@@ -279,7 +279,7 @@ void defw_release_agent_blk(defw_agent_blk_t *agent, int dead)
 
 void defw_release_agent_conn(defw_agent_blk_t *agent)
 {
-	assert(agent->state == IFW_AGENT_STATE_NEW);
+	assert(agent->state == DEFW_AGENT_STATE_NEW);
 	MUTEX_LOCK(&agent_array_mutex);
 	MUTEX_LOCK(&agent->state_mutex);
 
@@ -312,10 +312,10 @@ char *defw_agent_state2str(defw_agent_blk_t *agent)
 		return "SOMETHING WRONG";
 
 	sprintf(agent_state_str, "%s%s%s%s",
-		(agent->state & IFW_AGENT_STATE_ALIVE) ? "alive " : "dead ",
-		(agent->state & IFW_AGENT_CNTRL_CHANNEL_CONNECTED) ? " CTRL" : "",
-		(agent->state & IFW_AGENT_RPC_CHANNEL_CONNECTED) ? " RPC" : "",
-		(agent->state & IFW_AGENT_WORK_IN_PROGRESS) ? " WIP" : "");
+		(agent->state & DEFW_AGENT_STATE_ALIVE) ? "alive " : "dead ",
+		(agent->state & DEFW_AGENT_CNTRL_CHANNEL_CONNECTED) ? " CTRL" : "",
+		(agent->state & DEFW_AGENT_RPC_CHANNEL_CONNECTED) ? " RPC" : "",
+		(agent->state & DEFW_AGENT_WORK_IN_PROGRESS) ? " WIP" : "");
 
 	return agent_state_str;
 }
@@ -517,7 +517,7 @@ defw_agent_blk_t *defw_alloc_agent_blk(struct sockaddr_in *addr, bool add)
 	agent->iFileDesc = INVALID_TCP_SOCKET;
 	agent->iRpcFd = INVALID_TCP_SOCKET;
 	agent->addr = *addr;
-	set_agent_state(agent, IFW_AGENT_STATE_NEW);
+	set_agent_state(agent, DEFW_AGENT_STATE_NEW);
 	uuid_generate(agent->id.blk_uuid);
 	acquire_agent_blk(agent);
 
@@ -746,9 +746,9 @@ static void *defw_connect_to_agent_thread(void *user_data)
 
 	PDEBUG("Establishing CTRL channel on FD: %p:%d", agent, agent->iFileDesc);
 
-	set_agent_state(agent, IFW_AGENT_CNTRL_CHANNEL_CONNECTED);
-	set_agent_state(agent, IFW_AGENT_STATE_ALIVE);
-	unset_agent_state(agent, IFW_AGENT_STATE_NEW);
+	set_agent_state(agent, DEFW_AGENT_CNTRL_CHANNEL_CONNECTED);
+	set_agent_state(agent, DEFW_AGENT_STATE_ALIVE);
+	unset_agent_state(agent, DEFW_AGENT_STATE_NEW);
 
 	agent->iRpcFd = establishTCPConnection(
 				agent->addr.sin_addr.s_addr,
@@ -760,7 +760,7 @@ static void *defw_connect_to_agent_thread(void *user_data)
 	if (rc)
 		goto close;
 	PDEBUG("Establishing RPC channel on FD: %p:%d", agent, agent->iRpcFd);
-	set_agent_state(agent, IFW_AGENT_RPC_CHANNEL_CONNECTED);
+	set_agent_state(agent, DEFW_AGENT_RPC_CHANNEL_CONNECTED);
 
 	strncpy(agent->name, name, MAX_STR_LEN);
 	agent->name[MAX_STR_LEN-1] = '\0';
@@ -907,7 +907,7 @@ defw_send(char *dst_uuid, char *blk_uuid, char *yaml, defw_msg_type_t type)
 	     agent_blk->iRpcFd, yaml);
 
 	MUTEX_LOCK(&agent_blk->state_mutex);
-	if (!(agent_blk->state & IFW_AGENT_RPC_CHANNEL_CONNECTED)) {
+	if (!(agent_blk->state & DEFW_AGENT_RPC_CHANNEL_CONNECTED)) {
 		MUTEX_UNLOCK(&agent_blk->state_mutex);
 		PDEBUG("Establishing an RPC channel to agent %s:%s:%d",
 		       agent_blk->name,
@@ -929,12 +929,12 @@ defw_send(char *dst_uuid, char *blk_uuid, char *yaml, defw_msg_type_t type)
 			goto fail_rpc;
 		}
 		set_agent_state(agent_blk,
-				IFW_AGENT_RPC_CHANNEL_CONNECTED);
+				DEFW_AGENT_RPC_CHANNEL_CONNECTED);
 	} else {
 		MUTEX_UNLOCK(&agent_blk->state_mutex);
 	}
 
-	set_agent_state(agent_blk, IFW_AGENT_WORK_IN_PROGRESS);
+	set_agent_state(agent_blk, DEFW_AGENT_WORK_IN_PROGRESS);
 
 	rc = defw_send_msg(agent_blk->iRpcFd, yaml, msg_size, type);
 	if (rc != EN_DEFW_RC_OK) {
@@ -942,15 +942,15 @@ defw_send(char *dst_uuid, char *blk_uuid, char *yaml, defw_msg_type_t type)
 		goto fail_rpc;
 	}
 
-	unset_agent_state(agent_blk, IFW_AGENT_WORK_IN_PROGRESS);
+	unset_agent_state(agent_blk, DEFW_AGENT_WORK_IN_PROGRESS);
 	defw_release_agent_blk(agent_blk, false);
 
 	return EN_DEFW_RC_OK;
 
 fail_rpc:
-	unset_agent_state(agent_blk, IFW_AGENT_WORK_IN_PROGRESS);
+	unset_agent_state(agent_blk, DEFW_AGENT_WORK_IN_PROGRESS);
 	if (rc == EN_DEFW_RC_SOCKET_FAIL) {
-		set_agent_state(agent_blk, IFW_AGENT_STATE_DEAD);
+		set_agent_state(agent_blk, DEFW_AGENT_STATE_DEAD);
 		defw_release_agent_blk(agent_blk, true);
 	} else {
 		defw_release_agent_blk(agent_blk, false);

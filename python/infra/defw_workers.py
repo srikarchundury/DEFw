@@ -1,7 +1,7 @@
 import threading, queue, time, uuid, logging, yaml, importlib, traceback, sys
 import defw_common_def as common
 from cdefw_global import *
-from defw_exception import IFWCommError, IFWError, IFWInternalError
+from defw_exception import DEFwCommError, DEFwError, DEFwInternalError
 from cdefw_agent import defw_send_req, defw_send_rsp, defw_connect_to_service, \
 			defw_connect_to_client, defw_py_connect_status
 from defw import client_agents, service_agents, \
@@ -33,7 +33,7 @@ class WorkerEvent:
 		   we_type != WorkerEvent.EVENT_CONN_COMPLETE and \
 		   we_type != WorkerEvent.EVENT_REFRESH and \
 		   we_type != WorkerEvent.EVENT_SHUTDOWN:
-			   raise IFWError(f"Bad WorkerEvent type {we_type}")
+			   raise DEFwError(f"Bad WorkerEvent type {we_type}")
 
 class WorkerRequest:
 	WR_SEND_MSG = 1
@@ -63,7 +63,7 @@ class WorkerRequest:
 	def __check_type(self, wr_type):
 		if wr_type != WorkerRequest.WR_SEND_MSG and \
 		   wr_type != WorkerRequest.WR_CONNECT:
-			   raise IFWError(f"Bad Request type {wr_type}")
+			   raise DEFwError(f"Bad Request type {wr_type}")
 
 	def wait(self):
 		if not self.queue:
@@ -83,7 +83,7 @@ class WorkerRequest:
 			if event.ev_type == WorkerEvent.EVENT_CONN_COMPLETE:
 				return event.connect_status
 			return event.msg_yaml
-		raise IFWCommError('Response timed out')
+		raise DEFwCommError('Response timed out')
 
 	def get_uuid(self):
 		return self.req_uuid
@@ -115,7 +115,7 @@ class WorkerThread:
 			service_agents.reload()
 			active_client_agents.reload()
 			active_service_agents.reload()
-			logging.debug("Refreshed agent lists")
+			logging.debug(f"Refreshed agent lists {me.is_resmgr()}")
 
 			if not me.is_resmgr():
 				if 'Resource Manager' in service_apis:
@@ -222,7 +222,7 @@ class WorkerThread:
 			class_id = y['rpc']['class_id']
 			logging.debug(f"instantiate_class {class_name} with {class_id}")
 		else:
-			raise IFWError('Unexpected rpc')
+			raise DEFwError('Unexpected rpc')
 
 		# any remote invocation implies that module which needs to be
 		# imported is in the python/icpa-be/
@@ -240,7 +240,7 @@ class WorkerThread:
 				if hasattr(module_func, '__call__'):
 					rc = module_func(*args, **kwargs)
 			elif rpc_type == 'instantiate_class':
-				if me.is_resmgr() and class_name == 'IResMgr':
+				if me.is_resmgr() and class_name == 'DEFwResMgr':
 					common.add_to_class_db(defw.resmgr, class_id)
 				else:
 					my_class = getattr(module, class_name)
@@ -249,7 +249,7 @@ class WorkerThread:
 					instance = my_class(*args, **kwargs)
 					common.add_to_class_db(instance, class_id)
 			elif rpc_type == 'destroy_class':
-				if me.is_resmgr() and class_name == 'IResMgr':
+				if me.is_resmgr() and class_name == 'DEFwResMgr':
 					common.del_entry_from_class_db(class_id)
 				else:
 					instance = common.get_class_from_db(class_id)
@@ -258,11 +258,11 @@ class WorkerThread:
 			elif rpc_type == 'method_call':
 				instance = common.get_class_from_db(class_id)
 				if type(instance).__name__ != class_name:
-					raise IFWError(f"requested class {class_name}, "  \
+					raise DEFwError(f"requested class {class_name}, "  \
 								   f"but id refers to class {type(instance).__name__}")
 				rc = getattr(instance, method_name)(*args, **kwargs)
 		except Exception as e:
-			if type(e) == IFWError:
+			if type(e) == DEFwError:
 				defw_exception_string = e
 			else:
 				exception_list = traceback.format_stack()
@@ -335,7 +335,7 @@ def send_req(wr):
 					  yaml.dump(wr.msg))
 
 	if rc:
-		raise IFWCommError(f"Sending failed with {defw_rc2str(rc)}")
+		raise DEFwCommError(f"Sending failed with {defw_rc2str(rc)}")
 
 	if wr.blocking:
 		return wr.wait()
@@ -359,7 +359,7 @@ def connect_to_agent(wr):
 			  wr.get_uuid_str(),
 			  None)
 	if rc and rc != EN_DEFW_RC_IN_PROGRESS:
-		raise IFWError("Failed to connect:", defw_rc2str(rc))
+		raise DEFwError("Failed to connect:", defw_rc2str(rc))
 
 	if wr.blocking:
 		return wr.wait()

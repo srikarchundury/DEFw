@@ -1,4 +1,4 @@
-from defw_baseicpa import BaseRemote
+from defw_remote import BaseRemote
 from defw_util import prformat, fg, bg
 import os, traceback, logging
 

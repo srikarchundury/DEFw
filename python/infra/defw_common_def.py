@@ -1,5 +1,5 @@
 import cdefw_global
-from defw_exception import IFWError, IfwDumper
+from defw_exception import DEFwError, DEFwDumper
 import logging, os, yaml, shutil
 
 DEFW_STATUS_STRING = 'IFW STATUS: '
@@ -31,7 +31,7 @@ global_class_db = {}
 
 def add_to_class_db(instance, class_id):
 	if class_id in global_class_db:
-		raise IFWError("Duplicate class_id. Contention in timing")
+		raise DEFwError("Duplicate class_id. Contention in timing")
 	logging.debug(f"created instance for {type(instance).__name__} "\
 			      f"with id {class_id}")
 	global_class_db[class_id] = instance
@@ -209,10 +209,10 @@ def save_pref():
 
 	global_pref_file = os.path.join(cdefw_global.get_defw_tmp_dir(), 'defw_pref.yaml')
 	with open(global_pref_file, 'w') as f:
-		f.write(yaml.dump(global_pref, Dumper=IfwDumper, indent=2, sort_keys=False))
+		f.write(yaml.dump(global_pref, Dumper=DEFwDumper, indent=2, sort_keys=False))
 
 def dump_pref():
 	global global_pref
-	print(yaml.dump(global_pref, Dumper=IfwDumper, indent=2, sort_keys=True))
+	print(yaml.dump(global_pref, Dumper=DEFwDumper, indent=2, sort_keys=True))
 
 

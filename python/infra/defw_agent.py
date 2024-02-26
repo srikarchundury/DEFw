@@ -11,7 +11,7 @@ class Endpoint:
 		if not (node_type == EN_DEFW_RESMGR or \
 				node_type == EN_DEFW_SERVICE or \
 				node_type == EN_DEFW_AGENT):
-			raise IFWError("Unknown node type provided: ", node_type)
+			raise DEFwError("Unknown node type provided: ", node_type)
 		self.addr = addr
 		self.port = port
 		self.listen_port = listen_port
@@ -56,7 +56,7 @@ class Endpoint:
 		elif self.node_type == EN_DEFW_SERVICE:
 			nt = 'SERVICE'
 		else:
-			raise IFWError("Unknown node type provided: ", self.node_type)
+			raise DEFwError("Unknown node type provided: ", self.node_type)
 
 		return nt
 
@@ -114,7 +114,7 @@ class Agent:
 		import defw_workers
 
 		if not mname:
-			raise IFWError("A method or a function name need to be specified")
+			raise DEFwError("A method or a function name need to be specified")
 
 		rpc = populate_rpc_req(src, self.__endpoint, rpc_type, module, cname,
 				       mname, class_id, *args, **kwargs)
@@ -130,25 +130,25 @@ class Agent:
 
 		target = y['rpc']['dst']
 		if not target == src:
-			raise IFWError("MSG intended to %s but I am %s" % (target, src))
+			raise DEFwError("MSG intended to %s but I am %s" % (target, src))
 
 		source = y['rpc']['src']
 		if not source == self.__endpoint:
-			raise IFWError("MSG originated from %s but expected from %s" %
+			raise DEFwError("MSG originated from %s but expected from %s" %
 					 (source, self.name))
 
 		if y['rpc']['type'] == 'failure':
-			raise IFWRemoteError('RPC failure')
+			raise DEFwRemoteError('RPC failure')
 
 		if y['rpc']['type'] == 'exception':
 			if type(y['rpc']['exception']) == str:
-				raise IFWRemoteError(nname=source, msg=y['rpc']['exception'])
+				raise DEFwRemoteError(nname=source, msg=y['rpc']['exception'])
 			else:
 				raise y['rpc']['exception']
 
 		return y['rpc']['rc']
 
-class IfwAgents:
+class DEFwAgents:
 	"""
 	A class to access all agents. This is useful to get a view of all agents currently connected
 	"""
@@ -180,7 +180,7 @@ class IfwAgents:
 		try:
 			rc = self.agent_dict[key]
 		except:
-			raise IFWError('no entry for', key)
+			raise DEFwError('no entry for', key)
 		return rc
 
 	def __setitem__(self, endpoint):
@@ -253,22 +253,22 @@ class IfwAgents:
 	def disable_hb_check(self):
 		defw_agent_disable_hb()
 
-class IfwServiceAgents(IfwAgents):
+class DEFwServiceAgents(DEFwAgents):
 	def __init__(self):
 		self.__agent_dict = {}
 		super().__init__(self.__agent_dict, defw_get_next_service_agent)
 
-class IfwClientAgents(IfwAgents):
+class DEFwClientAgents(DEFwAgents):
 	def __init__(self):
 		self.__agent_dict = {}
 		super().__init__(self.__agent_dict, defw_get_next_client_agent)
 
-class IfwActiveServiceAgents(IfwAgents):
+class DEFwActiveServiceAgents(DEFwAgents):
 	def __init__(self):
 		self.__agent_dict = {}
 		super().__init__(self.__agent_dict, defw_get_next_active_service_agent)
 
-class IfwActiveClientAgents(IfwAgents):
+class DEFwActiveClientAgents(DEFwAgents):
 	def __init__(self):
 		self.__agent_dict = {}
 		super().__init__(self.__agent_dict, defw_get_next_active_client_agent)

@@ -3,11 +3,11 @@ import traceback
 import yaml
 import cdefw_global
 
-class IfwDumper(yaml.Dumper):
+class DEFwDumper(yaml.Dumper):
 	def increase_indent(self, flow=False, indentless=False):
-		return super(IfwDumper, self).increase_indent(flow, False)
+		return super(DEFwDumper, self).increase_indent(flow, False)
 
-class IFWError(Exception):
+class DEFwError(Exception):
 	def __init__(self, msg='', arg=None, halt=False, nname=""):
 		if not nname:
 			nname = cdefw_global.get_node_name()
@@ -27,15 +27,15 @@ class IFWError(Exception):
 		return self.__str__()
 
 	def __str__(self):
-		output = {'IFWError': {'node-name': self.node_name,
+		output = {'DEFwError': {'node-name': self.node_name,
 				  'msg': self.msg, 'arg': self.arg,
 				  'file name': self.filename,
 				  'line number': self.lineno,
 				  'function': self.function,
 				  'stacktrace': self.stacktrace}}
 		try:
-			#y = yaml.dump(output, Dumper=IfwDumper, indent=2, sort_keys=False, default_style='', default_flow_style=False)
-			y = yaml.dump(output, Dumper=IfwDumper, default_style='', default_flow_style=False)
+			#y = yaml.dump(output, Dumper=DEFwDumper, indent=2, sort_keys=False, default_style='', default_flow_style=False)
+			y = yaml.dump(output, Dumper=DEFwDumper, default_style='', default_flow_style=False)
 		except Exception as e:
 			print(type(e), e)
 		return y
@@ -61,27 +61,27 @@ class IFWError(Exception):
 	def get_arg(self):
 		return self.arg
 
-class IFWCommError(IFWError):
+class DEFwCommError(DEFwError):
 	def __init__(self, msg='', arg=None, halt=False, nname=None):
 		super().__init__(msg, arg, halt, nname)
 
-class IFWAgentNotFound(IFWError):
+class DEFwAgentNotFound(DEFwError):
 	def __init__(self, msg='', arg=None, halt=False, nname=None):
 		super().__init__(msg, arg, halt, nname)
 
-class IFWInternalError(IFWError):
+class DEFwInternalError(DEFwError):
 	def __init__(self, msg='', arg=None, halt=False, nname=None):
 		super().__init__(msg, arg, halt, nname)
 
-class IFWRemoteError(IFWError):
+class DEFwRemoteError(DEFwError):
 	def __init__(self, msg='', arg=None, halt=False, nname=cdefw_global.get_node_name()):
 		super().__init__(msg, arg, halt, nname)
 
-class IFWReserveError(IFWError):
+class DEFwReserveError(DEFwError):
 	def __init__(self, msg='', arg=None, halt=False, nname=cdefw_global.get_node_name()):
 		super().__init__(msg, arg, halt, nname)
 
-class IFWOutOfResources(IFWError):
+class DEFwOutOfResources(DEFwError):
 	def __init__(self, msg='', arg=None, halt=False, nname=cdefw_global.get_node_name()):
 		super().__init__(msg, arg, halt, nname)
 
@@ -89,14 +89,14 @@ def defw_error_representer(dumper, data):
 	mapping = {'node-name': data.node_name, 'msg': data.msg, 'arg': data.arg, 'halt': data.halt, 'filename': data.filename,
 		   'lineno': data.lineno, 'function': data.function, 'code_context': data.code_context,
 		   'index': data.index, 'stacktrace': data.stacktrace}
-	return dumper.represent_mapping(u'!IFWError', mapping)
+	return dumper.represent_mapping(u'!DEFwError', mapping)
 
 def defw_error_constructor(loader, node):
 	value = loader.construct_mapping(node)
-	defw_ex = IFWError()
+	defw_ex = DEFwError()
 	defw_ex.populate(value['node-name'], value['msg'], value['arg'], value['halt'], value['filename'], value['lineno'],
 			 value['function'], value['code_context'], value['index'], value['stacktrace'])
 	return defw_ex
 
-yaml.add_representer(IFWError, defw_error_representer)
-yaml.add_constructor(u'!IFWError', defw_error_constructor)
+yaml.add_representer(DEFwError, defw_error_representer)
+yaml.add_constructor(u'!DEFwError', defw_error_constructor)

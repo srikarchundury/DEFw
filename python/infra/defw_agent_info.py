@@ -1,4 +1,4 @@
-from defw_exception import IFWOutOfResources
+from defw_exception import DEFwOutOfResources
 
 # This is what an agent (either a service or a client) needs to return
 # when queried about the services it offers:

@@ -1,5 +1,5 @@
 import os, shlex, subprocess, threading, ctypes, time, logging
-from defw_exception import IFWError
+from defw_exception import DEFwError
 import defw_common_def
 
 def exec_cmd(cmd, exception=True):
@@ -15,7 +15,7 @@ def exec_cmd(cmd, exception=True):
 		return [None, -1]
 	t = out.communicate()[0],out.returncode
 	if t[1] != 0 and exception:
-		raise IFWError(cmd+"\n"+"rc = "+str(t[1])+"\n"+t[0].decode("utf-8"))
+		raise DEFwError(cmd+"\n"+"rc = "+str(t[1])+"\n"+t[0].decode("utf-8"))
 	elif t[1] != 0:
 		logging.critical("Failed to execute cmd: " + cmd + " with rc = " + str(t[1]))
 	return t

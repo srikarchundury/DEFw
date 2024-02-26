@@ -1,5 +1,5 @@
-#ifndef IFW_COMMON_H
-#define IFW_COMMON_H
+#ifndef DEFW_COMMON_H
+#define DEFW_COMMON_H
 
 #define RESET   "\033[0m"
 #define BLACK   "\033[30m"      /* Black */
@@ -113,4 +113,4 @@ typedef enum defw_run_mode {
 
 typedef void (*defw_connect_status)(defw_rc_t status, uuid_t uuid);
 
-#endif /* IFW_COMMON_H */
+#endif /* DEFW_COMMON_H */
