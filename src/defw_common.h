@@ -82,7 +82,7 @@ typedef enum {
 	EN_DEFW_RC_NO_DATA_ON_SOCKET = -22,
 	EN_DEFW_RC_KEEP_DATA = -23,
 	EN_DEFW_RC_UNKNOWN_MESSAGE = -24,
-	EN_DEFW_RC_MAX = -25,
+	EN_DEFW_RC_MAX,
 } defw_rc_t;
 
 typedef enum defw_type {

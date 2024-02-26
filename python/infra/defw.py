@@ -22,6 +22,7 @@ active_client_agents = None
 active_service_agents = None
 me = None
 resmgr = None
+updater_thread = None
 
 def get_nearest_yaml_block():
 	global g_yaml_blocks
@@ -903,6 +904,7 @@ class Myself:
 		'''
 		from defw_workers import put_shutdown
 		put_shutdown()
+		updater_thread.join()
 		print("Shutting down the IFW")
 		exit()
 
@@ -1096,12 +1098,17 @@ def resolve_environment_vars(config):
 def configure_defw():
 	global defw_path
 
-	try:
-		config = os.environ['DEFW_CONFIG_PATH']
-		defw_path = os.environ['DEFW_PATH']
-	except:
+	if 'DEFW_PATH' not in os.environ:
 		defw_path = os.getcwd()
+	else:
+		defw_path = os.environ['DEFW_PATH']
+
+	if 'DEFW_CONFIG_PATH' not in os.environ:
 		config = os.path.join(defw_path, "python", "config", "defw.yaml")
+	else:
+		config = os.environ['DEFW_CONFIG_PATH']
+	print(config)
+	print(defw_path)
 
 	cy = None
 	if os.path.isfile(config):
@@ -1250,4 +1257,3 @@ if not cdefw_global.get_defw_initialized():
 
 	cdefw_global.set_defw_initialized(True)
 
-	print(id(resmgr))

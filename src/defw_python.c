@@ -58,17 +58,19 @@ static defw_rc_t python_setup(void)
 	RUN_PYTHON_CMD("import os\n");
 	RUN_PYTHON_CMD("import sys\n");
 	RUN_PYTHON_CMD("import readline\n");
+/*
 	snprintf(buf, sizeof(buf),
 		"import sys\n"
 		"import traceback\n"
 		"def log_exception(exc_type, exc_value, exc_traceback):\n"
-		"    with open('/tmp/ashehata', 'a') as f:\n"
+		"    with open('/tmp/defwtmp', 'a') as f:\n"
 		"        f.write(f\"Exception Type: {exc_type}\\n\")\n"
 		"        f.write(f\"Exception Value: {exc_value}\\n\")\n"
 		"        f.write(\"Traceback:\\n\")\n"
 		"        f.writelines(traceback.format_exception(exc_type, exc_value, exc_traceback))\n"
 		"sys.excepthook = log_exception");
 	RUN_PYTHON_CMD(buf);
+*/
 	/* all other paths are figured out within python */
 	snprintf(buf, sizeof(buf),
 		"sys.path.append(os.path.join('%s', 'python', 'infra'))", infra);
@@ -136,24 +138,64 @@ defw_rc_t python_run_interactive_shell(void)
 	return EN_DEFW_RC_OK;
 }
 
-defw_rc_t python_run_cmd_line(int argc, char *argv[])
+defw_rc_t python_run_cmd_line(int argc, char *argv[], char *module, char *cmd)
 {
-	int py_rc;
+	char buf[MAX_STR_LEN * 4];
+	PyObject *pSysArgv;
+	PyObject *pArg;
+	ssize_t len;
+	FILE *f;
 
-	// Convert char* command-line arguments to wchar_t*
-	wchar_t** wideArgv = (wchar_t**)malloc((argc + 1) * sizeof(wchar_t*));
-	for (int i = 0; i < argc; ++i) {
-		int wideArgc = mbstowcs(NULL, argv[i], 0);
-		wideArgv[i] = (wchar_t*)malloc((wideArgc + 1) * sizeof(wchar_t));
-		mbstowcs(wideArgv[i], argv[i], wideArgc + 1);
-	}
-	wideArgv[argc] = NULL;
-
-	py_rc = Py_Main(argc, wideArgv);
-	free(wideArgv);
-	if (py_rc) {
-		PERROR("Python execution failed: %d\n", py_rc);
+	if (!g_defw_cfg.initialized)
 		return EN_DEFW_RC_PY_SCRIPT_FAIL;
+
+	/* skip the option */
+	if (module) {
+		argc -= 1;
+		argv += 1;
+	/* skip the option and its arg */
+	} else if (cmd) {
+		argc -= 2;
+		argv += 2;
+	}
+
+	pSysArgv = PySys_GetObject("argv");
+	for (int i = 0; i < argc; ++i) {
+		pArg = PyUnicode_DecodeUTF8(argv[i], strlen(argv[i]), "surrogateescape");
+		PyList_Append(pSysArgv, pArg);
+		Py_DECREF(pArg);
+	}
+	len = readlink("/proc/self/exe", buf, sizeof(buf)-1);
+	if (len < sizeof(buf)-1)
+		buf[len] = '\0';
+	else
+		buf[sizeof(buf)-1] = '\0';
+
+	PySys_SetObject("executable", PyUnicode_DecodeFSDefault(buf));
+	PySys_SetObject("_base_executable", PyUnicode_DecodeFSDefault(buf));
+
+	RUN_PYTHON_CMD("sys.argv.pop(0); print(sys.argv)\n");
+
+	if (module) {
+		sprintf(buf,
+			"import runpy\n"
+			"try:\n"
+			"    runpy.run_module('%s', run_name='__main__', alter_sys=False)\n"
+			"except SystemExit as e:\n"
+			"    pass\n"
+			"except Exception as e:\n"
+			"    print(e)\n"
+			"print(f'Running module %s with args: {sys.argv}')\n", module, module);
+		RUN_PYTHON_CMD(buf);
+	} else if (cmd) {
+		RUN_PYTHON_CMD(cmd);
+	} else if (argc >= 1) {
+		f = fopen(argv[0], "r");
+		if (!f)
+			return EN_DEFW_RC_PY_SCRIPT_FAIL;
+
+		PyRun_SimpleFile(f, argv[0]);
+		fclose(f);
 	}
 
 	return EN_DEFW_RC_OK;
@@ -178,13 +220,16 @@ defw_rc_t python_init(void)
 	return python_setup();
 }
 
-void python_finalize()
+defw_rc_t python_finalize()
 {
 	PDEBUG("Python finalizing");
 
+	RUN_PYTHON_CMD("me.exit()")
 	Py_Finalize();
 
 	PDEBUG("Python finalized");
+
+	return EN_DEFW_RC_OK;
 }
 
 typedef enum python_callbacks {

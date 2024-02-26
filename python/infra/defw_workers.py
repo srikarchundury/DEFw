@@ -59,7 +59,7 @@ class WorkerRequest:
 			self.queue = queue.Queue()
 		else:
 			self.queue = None
-	
+
 	def __check_type(self, wr_type):
 		if wr_type != WorkerRequest.WR_SEND_MSG and \
 		   wr_type != WorkerRequest.WR_CONNECT:
@@ -102,6 +102,8 @@ class WorkerThread:
 
 	def put_ev(self, we):
 		self.queue.put(we)
+		if we.EVENT_SHUTDOWN:
+			self.thread.join()
 
 	def add_work_request(self, work_request):
 		with self.req_db_lock:

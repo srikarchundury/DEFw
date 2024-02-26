@@ -19,13 +19,13 @@ defw_rc_t python_init(void);
  * python_finalize
  *   Finalize the python interpreter
  */
-void python_finalize(void);
+defw_rc_t python_finalize(void);
 
 /*
  * python_run_cmd_line
  *   this is intended to run python as you would from the command line
  */
-defw_rc_t python_run_cmd_line(int argc, char *argv[]);
+defw_rc_t python_run_cmd_line(int argc, char *argv[], char *module, char *cmd);
 
 /*
  * python_exec
