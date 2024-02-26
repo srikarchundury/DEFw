@@ -1,0 +1,14 @@
+defw:
+    environment:
+        DEFW_PATH: ${HOME}/ORNL/Quantum/qhpc
+    master-address: 127.0.0.1
+    master-port: 8090
+    master-name: resmgr
+    name: ${DEFW_AGENT_NAME}
+    listen-port: ${DEFW_LISTEN_PORT}
+    shell: cmdline
+    type: ${DEFW_AGENT_TYPE}
+    path: ${DEFW_PATH}
+    tmp: ${HOME}/tmp/${DEFW_AGENT_NAME}
+    loglevel: ${DEFW_LOG_LEVEL}
+
