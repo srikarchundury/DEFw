@@ -18,7 +18,7 @@ class BaseAgentAPI(BaseRemote):
 				logging.debug("Can't query Resource Manager");
 				return
 			for c in module.service_classes:
-				obj = c()
+				obj = c(start=False)
 				return obj.query()
 
 	'''

@@ -20,7 +20,7 @@ def exec_cmd(cmd, exception=True):
 		logging.critical("Failed to execute cmd: " + cmd + " with rc = " + str(t[1]))
 	return t
 
-class IfwCmd(threading.Thread):
+class DEFwCmd(threading.Thread):
 	def __init__(self, name, cmd, exception=False):
 		threading.Thread.__init__(self)
 		self.name = name
@@ -41,7 +41,7 @@ class IfwCmd(threading.Thread):
 def defw_exec_local_cmd(cmd, expire=0, exception=True):
 	if expire <= 0 or not type(expire) == int:
 		return exec_cmd(cmd, exception=exception)
-	cmd_thrd = IfwCmd('defw_cmd', cmd, exception=exception)
+	cmd_thrd = DEFwCmd('defw_cmd', cmd, exception=exception)
 	cmd_thrd.start()
 	time.sleep(expire)
 	if cmd_thrd.isAlive():

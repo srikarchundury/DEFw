@@ -1,5 +1,5 @@
-#ifndef IFW_CONNECT_H
-#define IFW_CONNECT_H
+#ifndef DEFW_CONNECT_H
+#define DEFW_CONNECT_H
 
 #include "defw_common.h"
 
@@ -91,4 +91,4 @@ static inline const char *defw_rc2str(defw_rc_t rc)
 	return str[rc];
 }
 
-#endif /* IFW_CONNECT_H */
+#endif /* DEFW_CONNECT_H */

@@ -15,7 +15,7 @@ svc_info = {'name': 'Quantum HPC',
 #	query()
 #	reserve()
 #	release()
-service_classes = [IQhpc]
+service_classes = [Qhpc]
 
 def initialize():
 	# Initialize the service. EX: start threads/processes, etc

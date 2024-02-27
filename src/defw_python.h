@@ -1,5 +1,5 @@
-#ifndef IFW_PYTHON_H
-#define IFW_PYTHON_H
+#ifndef DEFW_PYTHON_H
+#define DEFW_PYTHON_H
 
 #include <pthread.h>
 #include "defw.h"
@@ -70,4 +70,4 @@ void python_update_interactive_shell(void);
  */
 defw_rc_t python_refresh_agent(void);
 
-#endif /* IFW_PYTHON_H */
+#endif /* DEFW_PYTHON_H */

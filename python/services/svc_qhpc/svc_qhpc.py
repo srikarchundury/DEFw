@@ -72,25 +72,27 @@ class Circuit:
 
 		return 'BUG'
 
-class IQhpc:
-	def __init__(self):
+class Qhpc:
+	def __init__(self, start=True):
 		self.circuits = {}
 		self.runner_queue = queue.Queue()
 		self.circuit_results = []
-		self.runner = threading.Thread(target=self.runner, args=())
-		self.runner.start()
+		if start:
+			self.runner = threading.Thread(target=self.runner, args=())
+			self.runner.start()
 		self.runner_shutdown = False
 
 	def __del__(self):
+		self.runner_shutdown = True
 		self.runner_queue.put(-1)
 
 	def runner(self):
-		shutdown = False
-		while not shutdown:
+		logging.debug("starting Qhpc main loop")
+		while not self.runner_shutdown:
 			try:
 				cid = self.runner_queue.get(timeout=1)
 				if cid == -1:
-					shutdown = True
+					self.runner_shutdown = True
 					continue
 			except queue.Empty:
 				continue
@@ -141,7 +143,7 @@ class IQhpc:
 		logging.debug(f"{client_ep} reserved the {svc}")
 
 	def release(self, services):
-		pass
+		self.runner_shutdown = True
 
 	def __find_circuit(self, cid):
 		if cid in self.circuits:

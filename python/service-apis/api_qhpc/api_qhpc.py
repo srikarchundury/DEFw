@@ -1,6 +1,6 @@
 from defw_remote import BaseRemote
 
-class IQhpc(BaseRemote):
+class Qhpc(BaseRemote):
 	def __init__(self, ep):
 		super().__init__(target=ep)
 

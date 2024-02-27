@@ -1,5 +1,5 @@
-#ifndef IFW_AGENTS_H
-#define IFW_AGENTS_H
+#ifndef DEFW_AGENTS_H
+#define DEFW_AGENTS_H
 
 #include "defw_common.h"
 
@@ -190,4 +190,4 @@ static inline defw_agent_uuid_t *defw_get_agent_uuid_raw(defw_agent_blk_t *agent
 	return &agent->id;
 }
 
-#endif /* IFW_AGENTS_H */
+#endif /* DEFW_AGENTS_H */

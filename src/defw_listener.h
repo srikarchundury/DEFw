@@ -1,5 +1,5 @@
-#ifndef IFW_LISTENER_H
-#define IFW_LISTENER_H
+#ifndef DEFW_LISTENER_H
+#define DEFW_LISTENER_H
 
 #include "defw_common.h"
 #include "defw_agent.h"
@@ -10,4 +10,4 @@ void defw_listener_shutdown(void);
 
 int defw_get_highest_fd(void);
 
-#endif /* IFW_LISTENER_H */
+#endif /* DEFW_LISTENER_H */

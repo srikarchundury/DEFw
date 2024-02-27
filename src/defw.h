@@ -1,5 +1,5 @@
-#ifndef IFW_H
-#define IFW_H
+#ifndef DEFW_H
+#define DEFW_H
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -20,7 +20,7 @@ extern pthread_spinlock_t log_spin_lock;
 #define OUT_LOG_NAME "defw_out.log"
 #define OUT_PY_LOG "defw_py.log"
 #define LARGE_LOG_FILE 400000000 /* 400 MB */
-#define IFW_UUID_STR_LEN		(UUID_STR_LEN+12)
+#define DEFW_UUID_STR_LEN		(UUID_STR_LEN+12)
 
 typedef struct hb_info_s {
 	struct sockaddr_in master_address;
@@ -132,4 +132,4 @@ defw_rc_t readTcpMessage(int iFd, char *pcBuffer,
 
 defw_rc_t closeTcpConnection(int iTcpSocket);
 
-#endif /* IFW_H */
+#endif /* DEFW_H */

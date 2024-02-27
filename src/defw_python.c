@@ -1,5 +1,6 @@
 #include <Python.h>
 #include <netinet/in.h>
+#include <stdatomic.h>
 #include "defw.h"
 #include "defw_python.h"
 #include "defw_listener.h"
@@ -7,6 +8,7 @@
 extern defw_config_params_t g_defw_cfg;
 static PyObject *g_interactive_shell;
 static pthread_mutex_t g_interactive_shell_mutex;
+static atomic_long g_py_gil_refcount;
 
 #define RUN_PYTHON_CMD(cmd) {\
 	int py_rc;							\
@@ -210,6 +212,7 @@ defw_rc_t python_init(void)
 	wchar_t program[5];
 
 	pthread_mutex_init(&g_interactive_shell_mutex, NULL);
+	atomic_init(&g_py_gil_refcount, 0);
 
 	swprintf(program, 3, L"%hs", "defw");
 
@@ -224,7 +227,8 @@ defw_rc_t python_finalize()
 {
 	PDEBUG("Python finalizing");
 
-	RUN_PYTHON_CMD("me.exit()")
+	if (g_defw_cfg.shell == EN_DEFW_RUN_CMD_LINE)
+		RUN_PYTHON_CMD("me.exit()")
 	Py_Finalize();
 
 	PDEBUG("Python finalized");
@@ -247,6 +251,20 @@ char *python_callback_str[EN_PY_CB_MAX] = {
 	"put_connect_complete",
 };
 
+PyGILState_STATE python_gil_ensure()
+{
+	PyGILState_STATE gstate;
+	gstate = PyGILState_Ensure();
+	(void)atomic_fetch_add(&g_py_gil_refcount, 1);
+	return gstate;
+}
+
+void python_gil_release(PyGILState_STATE gstate)
+{
+	PyGILState_Release(gstate);
+	(void) atomic_fetch_sub(&g_py_gil_refcount, 1);
+}
+
 static defw_rc_t
 python_handle_op(char *msg, defw_rc_t status, char *uuid, python_callbacks_t cb)
 {
@@ -265,7 +283,7 @@ python_handle_op(char *msg, defw_rc_t status, char *uuid, python_callbacks_t cb)
 	if (msg && uuid)
 		PMSG("Handling %s from %s\n%s", func, uuid, msg);
 
-	gstate = PyGILState_Ensure();
+	gstate = python_gil_ensure();
 
 	str = PyUnicode_FromString((char *)"defw_workers");
 	defw = PyImport_Import(str);
@@ -286,12 +304,13 @@ python_handle_op(char *msg, defw_rc_t status, char *uuid, python_callbacks_t cb)
 	default:
 		break;
 	}
+
 	result = PyObject_CallObject(py_handler, args);
 
 	if (!result)
 		PDEBUG("%s didn't return any values", func);
 
-	PyGILState_Release(gstate);
+	python_gil_release(gstate);
 
 	return rc;
 }
@@ -329,7 +348,7 @@ void python_update_interactive_shell(void)
 		return;
 
 	pthread_mutex_lock(&g_interactive_shell_mutex);
-	gstate = PyGILState_Ensure();
+	gstate = python_gil_ensure();
 	defw = PyImport_AddModule("defw");
 	globals = PyModule_GetDict(defw);
 	/*
@@ -346,7 +365,7 @@ void python_update_interactive_shell(void)
 	Py_DECREF(globals);
 	Py_DECREF(globals_copy);
 	Py_DECREF(g_interactive_shell);
-	PyGILState_Release(gstate);
+	python_gil_release(gstate);
 	pthread_mutex_unlock(&g_interactive_shell_mutex);
 }
 

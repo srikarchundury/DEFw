@@ -102,7 +102,8 @@ class WorkerThread:
 
 	def put_ev(self, we):
 		self.queue.put(we)
-		if we.EVENT_SHUTDOWN:
+		if we.ev_type == we.EVENT_SHUTDOWN:
+			logging.debug("Waiting for Worker thread to shutdown")
 			self.thread.join()
 
 	def add_work_request(self, work_request):
@@ -168,12 +169,12 @@ class WorkerThread:
 					with self.req_db_lock:
 						logging.critical(f"Unmatched response. DB = {self.req_db}")
 			elif we.ev_type == WorkerEvent.EVENT_SHUTDOWN:
-				logging.debug("Shutting down thread")
 				shutdown = True
 				# shutdown any waiting events
 				with self.req_db_lock:
 					for k, v in self.req_db.items():
 						v.queue.put(WorkerEvent.EVENT_SHUTDOWN)
+				logging.debug("Worker thread shutdown")
 			else:
 				logging.critical(f"Bug. Unknown event {we.ev_type}")
 
@@ -192,14 +193,10 @@ class WorkerThread:
 			logging.debug(target)
 			logging.debug(me.my_endpoint())
 			return
-		logging.critical("after check")
 		source = y['rpc']['src']
 		hostname = source.hostname
-		logging.critical("after check 3")
 		mname = y['rpc']['module']
-		logging.critical("after check 4")
 		rpc_type = y['rpc']['type']
-		logging.critical("after check 5")
 		if rpc_type == 'function_call':
 			function_name = y['rpc']['function']
 		elif rpc_type == 'method_call':
@@ -230,16 +227,18 @@ class WorkerThread:
 		logging.critical("rpc type is: %s " % rpc_type)
 		module = importlib.import_module(mname)
 		importlib.reload(module)
-		logging.debug(f"module is: {dir(module)}")
+		logging.debug(f"module is: {module.__name__}")
 		args = y['rpc']['parameters']['args']
 		kwargs = y['rpc']['parameters']['kwargs']
 		defw_exception_string = None
 		try:
 			if rpc_type == 'function_call':
+				logging.debug(f'remote call to function {function_name}')
 				module_func = getattr(module, function_name)
 				if hasattr(module_func, '__call__'):
 					rc = module_func(*args, **kwargs)
 			elif rpc_type == 'instantiate_class':
+				logging.debug(f'remote call to instantiate class {class_name}')
 				if me.is_resmgr() and class_name == 'DEFwResMgr':
 					common.add_to_class_db(defw.resmgr, class_id)
 				else:
@@ -249,6 +248,7 @@ class WorkerThread:
 					instance = my_class(*args, **kwargs)
 					common.add_to_class_db(instance, class_id)
 			elif rpc_type == 'destroy_class':
+				logging.debug(f'remote call to destroy class {class_name}')
 				if me.is_resmgr() and class_name == 'DEFwResMgr':
 					common.del_entry_from_class_db(class_id)
 				else:
@@ -260,6 +260,7 @@ class WorkerThread:
 				if type(instance).__name__ != class_name:
 					raise DEFwError(f"requested class {class_name}, "  \
 								   f"but id refers to class {type(instance).__name__}")
+				logging.debug(f'remote call to method call {class_name}.{method_name}')
 				rc = getattr(instance, method_name)(*args, **kwargs)
 		except Exception as e:
 			if type(e) == DEFwError:

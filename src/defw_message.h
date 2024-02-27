@@ -1,5 +1,5 @@
-#ifndef IFW_MESSAGE_H
-#define IFW_MESSAGE_H
+#ifndef DEFW_MESSAGE_H
+#define DEFW_MESSAGE_H
 
 #include "defw_common.h"
 
@@ -37,4 +37,4 @@ typedef struct defw_msg_num_agents_query_s {
 	int num_agents;
 } defw_msg_num_agents_query_t;
 
-#endif /* IFW_MESSAGE_H */
+#endif /* DEFW_MESSAGE_H */

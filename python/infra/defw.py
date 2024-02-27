@@ -906,6 +906,8 @@ class Myself:
 		put_shutdown()
 		updater_thread.join()
 		print("Shutting down the IFW")
+		for thread in threading.enumerate():
+			logging.critical(f"- {thread.name} (ID: {thread.ident})")
 		exit()
 
 	def get_cpuinfo(self):
