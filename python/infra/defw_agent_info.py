@@ -1,8 +1,9 @@
 from defw_exception import DEFwOutOfResources
+from defw import me
 
 # This is what an agent (either a service or a client) needs to return
 # when queried about the services it offers:
-# IAgentInfo contains a list of ServiceDescr
+# DEFwAgentInfo contains a list of ServiceDescr
 # Each ServiceDescr has a list of Capability
 # Each Capability describes a capacity it can handle
 #
@@ -68,10 +69,11 @@ class ServiceDescr:
 			raise FIWOutOfResources(f"Release unreserved service {self.__service_name}")
 		self.__cur_capacity += 1
 
-class IAgentInfo:
+class DEFwAgentInfo:
 	def __init__(self, name, mname, services):
 		self.__name = name
 		self.__module_name = mname
+		self.__my_ep = me.my_endpoint()
 		self.__owned_services = services
 
 	def __contains__(self, item):
@@ -86,7 +88,7 @@ class IAgentInfo:
 
 		viable_services = []
 		for s in self.__owned_services:
-			if s.get_service_descr(Sfilter):
+			if s.get_service(Sfilter):
 				viable_services.append(s)
 
 		return viable_serices
@@ -97,7 +99,10 @@ class IAgentInfo:
 	def get_module_name(self):
 		return self.__module_name
 
+	def get_endpoint(self):
+		return self.__my_ep
+
 	def __repr__(self):
-		return f"Agent Info(name={self.__name}, Services Owned={self.__owned_services}"
+		return f"Agent Info(name={self.__name}, Residence={self.__my_ep}, Services Owned={self.__owned_services}"
 
 

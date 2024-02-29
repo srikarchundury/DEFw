@@ -152,14 +152,16 @@ class DEFwResMgr:
 			s =  v['info'].get_services(service_filter)
 			if len(s) > 0:
 				services[k] = {'loc': DEFwResMgr.ACTV_SVC, 'services': s,
-							   'api': v['info'].get_name()}
+							   'api': v['info'].get_name(),
+							   'residence': v['info'].get_endpoint()}
 		for k, v in self.__services_db.items():
 			if not v['info']:
 				continue
 			s =  v['info'].get_services(service_filter)
 			if len(s) > 0:
 				services[k] = {'loc': DEFwResMgr.SVC, 'services': s,
-							   'api': v['info'].get_name()}
+							   'api': v['info'].get_name(),
+							   'residence': v['info'].get_endpoint()}
 		return services
 
 	"""
