@@ -1,0 +1,12 @@
+defw:
+    parent-address: ${DEFW_PARENT_ADDR}
+    parent-port: ${DEFW_PARENT_PORT}
+    parent-name: ${DEFW_PARENT_NAME}
+    name: ${DEFW_AGENT_NAME}
+    listen-port: ${DEFW_LISTEN_PORT}
+    shell: ${DEFW_SHELL_TYPE}
+    type: ${DEFW_AGENT_TYPE}
+    path: ${DEFW_PATH}
+    tmp: ${DEFW_LOG_DIR}
+    loglevel: ${DEFW_LOG_LEVEL}
+

@@ -39,24 +39,24 @@ void set_py_path(char *path)
 	strncpy(g_defw_cfg.py_path, path, MAX_STR_LEN);
 }
 
-char *get_master_name(void)
+char *get_parent_name(void)
 {
-	return g_defw_cfg.master_name;
+	return g_defw_cfg.parent_name;
 }
 
-void set_master_name(char *name)
+void set_parent_name(char *name)
 {
-	strncpy(g_defw_cfg.master_name, name, MAX_STR_LEN);
+	strncpy(g_defw_cfg.parent_name, name, MAX_STR_LEN);
 }
 
-char *get_master_hostname(void)
+char *get_parent_hostname(void)
 {
-	return g_defw_cfg.master_hostname;
+	return g_defw_cfg.parent_hostname;
 }
 
-void set_master_hostname(char *name)
+void set_parent_hostname(char *name)
 {
-	strncpy(g_defw_cfg.master_hostname, name, MAX_STR_LEN);
+	strncpy(g_defw_cfg.parent_hostname, name, MAX_STR_LEN);
 }
 
 char *get_hostname(void)
@@ -145,26 +145,26 @@ void set_agent_telnet_port(int port)
 	g_defw_cfg.l_info.hb_info.agent_telnet_port = port;
 }
 
-char *get_master_address(void)
+char *get_parent_address(void)
 {
-	return inet_ntoa(g_defw_cfg.l_info.hb_info.master_address.sin_addr);
+	return inet_ntoa(g_defw_cfg.l_info.hb_info.parent_address.sin_addr);
 }
 
-defw_rc_t set_master_address(const char *addr)
+defw_rc_t set_parent_address(const char *addr)
 {
-	if (!inet_aton(addr, &g_defw_cfg.l_info.hb_info.master_address.sin_addr))
+	if (!inet_aton(addr, &g_defw_cfg.l_info.hb_info.parent_address.sin_addr))
 		return EN_DEFW_RC_BAD_ADDR;
 	return EN_DEFW_RC_OK;
 }
 
-int get_master_port(void)
+int get_parent_port(void)
 {
-	return g_defw_cfg.l_info.hb_info.master_address.sin_port;
+	return g_defw_cfg.l_info.hb_info.parent_address.sin_port;
 }
 
-void set_master_port(int port)
+void set_parent_port(int port)
 {
-	g_defw_cfg.l_info.hb_info.master_address.sin_port = port;
+	g_defw_cfg.l_info.hb_info.parent_address.sin_port = port;
 }
 
 defw_run_mode_t get_defw_mode(void)

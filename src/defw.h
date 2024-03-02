@@ -23,7 +23,7 @@ extern pthread_spinlock_t log_spin_lock;
 #define DEFW_UUID_STR_LEN		(UUID_STR_LEN+12)
 
 typedef struct hb_info_s {
-	struct sockaddr_in master_address;
+	struct sockaddr_in parent_address;
 	int agent_telnet_port;
 	char node_name[MAX_STR_LEN];
 } hb_info_t;
@@ -43,8 +43,8 @@ typedef struct defw_config_params_s {
 	char cfg_path[MAX_STR_LEN]; /* path to config file */
 	char defw_path[MAX_STR_LEN]; /* path to defw */
 	char py_path[MAX_STR_LEN]; /* other python specific paths */
-	char master_name[MAX_STR_LEN]; /* name of master. Important if I'm an agent */
-	char master_hostname[MAX_STR_LEN]; /* hostname of master. Important if I'm an agent */
+	char parent_name[MAX_STR_LEN]; /* name of master. Important if I'm an agent */
+	char parent_hostname[MAX_STR_LEN]; /* hostname of master. Important if I'm an agent */
 	char hostname[MAX_STR_LEN]; /* local hostname. */
 	char suite[MAX_STR_LEN]; /* name of suite to run. Run all if not present */
 	char suite_list[MAX_STR_LEN]; /* list of suites to run. Takes precedence

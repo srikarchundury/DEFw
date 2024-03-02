@@ -6,15 +6,18 @@ from defw_exception import DEFwError, DEFwDumper
 from defw_cmd import defw_exec_local_cmd
 import importlib, socket
 import cdefw_global
-from defw_agent import DEFwClientAgents, DEFwServiceAgents, DEFwActiveClientAgents, DEFwActiveServiceAgents, Endpoint
+from defw_agent import DEFwClientAgents, DEFwServiceAgents, \
+	 DEFwActiveClientAgents, DEFwActiveServiceAgents, Endpoint
 import netifaces
 import os, subprocess, sys, yaml, fnmatch, logging, csv, uuid
 import shutil, traceback, datetime, re, copy, threading, queue, time
-from defw_util import prformat, fg, bg, generate_random_string, get_lscpu, get_today, get_now
+from defw_util import prformat, fg, bg, generate_random_string, \
+	 get_lscpu, get_today, get_now
 
 preferences = {}
 defw_tmp_dir = ''
 defw_path = ''
+only_load = []
 g_yaml_blocks = []
 client_agents = None
 service_agents = None
@@ -157,7 +160,7 @@ class YamlGlobalTestResults:
 					if r['status'] == 'FAIL':
 						sstatus = 'FAIL'
 				e['duration'] = total_duration
-				# TODO: Pass the IFW for now until we clean up the tests
+				# TODO: Pass the DEFw for now until we clean up the tests
 				sstatus = 'PASS'
 				e['status'] = sstatus
 				e['submission'] = timefmt
@@ -773,6 +776,10 @@ class Suites(MethodInterceptor):
 		suites_dict['suites'].sort()
 		print(yaml.dump(suites_dict, Dumper=DEFwDumper, indent=2, sort_keys=True))
 
+	def finalize(self):
+		for k, v in self.test_db.items():
+			v.uninitialize()
+
 class ICPASuites(Suites):
 	def __init__(self):
 		super().__init__(os.path.join(defw_path, "python", "service-apis"), prefix="api_",
@@ -797,6 +804,8 @@ class ServiceSuitesBase(Suites):
 			#import the directory as a package
 			if d.startswith(self.suite_prefix):
 				name = d.replace(self.suite_prefix, '')
+				if only_load and d not in only_load and name != 'resmgr':
+					continue
 				mod_path = import_path+"."+d
 				# TODO for now disable loading the resmgr if you're not
 				# the resmgr. is there a better way of handling this?
@@ -831,15 +840,15 @@ class ExpSuites(Suites):
 
 class Myself:
 	'''
-	Class which represents this IFW instance.
+	Class which represents this DEFw instance.
 	It allows extraction of:
 		- interfaces available
 		- listen port
 		- telnet port
 		- name
 		- hostname
-		- IFW type
-	It provides an exit method to exit the IFW instance
+		- DEFw type
+	It provides an exit method to exit the DEFw instance
 	'''
 	def __init__(self, cy):
 		global preferences
@@ -900,12 +909,14 @@ class Myself:
 
 	def exit(self):
 		'''
-		Shutdown the IFW
+		Shutdown the DEFw
 		'''
 		from defw_workers import put_shutdown
 		put_shutdown()
 		updater_thread.join()
-		print("Shutting down the IFW")
+		services.finalize()
+		service_apis.finalize()
+		print("Shutting down the DEFw")
 		for thread in threading.enumerate():
 			logging.critical(f"- {thread.name} (ID: {thread.ident})")
 		exit()
@@ -948,7 +959,7 @@ class Myself:
 
 	def my_name(self):
 		'''
-		Return the symbolic name assigned to this IFW instance
+		Return the symbolic name assigned to this DEFw instance
 		'''
 		return self.__my_endpoint.name
 
@@ -960,25 +971,25 @@ class Myself:
 
 	def my_type(self):
 		'''
-		Return the type of this IFW instance
+		Return the type of this DEFw instance
 		'''
 		self.__my_endpoint.node_type2str()
 
 	def my_listenport(self):
 		'''
-		Return the listen port of this IFW instance
+		Return the listen port of this DEFw instance
 		'''
 		return self.__my_endpoint.port
 
 	def my_listenaddress(self):
 		'''
-		Return the listen port of this IFW instance
+		Return the listen port of this DEFw instance
 		'''
 		return self.__my_endpoint.addr
 
 	def my_pid(self):
 		'''
-		Return the pid of this IFW instance
+		Return the pid of this DEFw instance
 		'''
 		return self.__my_endpoint.pid
 
@@ -1099,6 +1110,12 @@ def resolve_environment_vars(config):
 
 def configure_defw():
 	global defw_path
+	global only_load
+
+	if 'DEFW_ONLY_LOAD_MODULE' in os.environ:
+		only_load = os.environ['DEFW_ONLY_LOAD_MODULE'].split(',')
+	else:
+		only_load = []
 
 	if 'DEFW_PATH' not in os.environ:
 		defw_path = os.getcwd()
@@ -1118,11 +1135,11 @@ def configure_defw():
 			cy = yaml.load(f, Loader=yaml.FullLoader)
 			resolve_environment_vars(cy)
 			cdefw_global.set_defw_path(cy['defw']['path'])
-			cdefw_global.set_master_name(cy['defw']['master-name'])
-			cdefw_global.set_master_address(cy['defw']['master-address'])
-			cdefw_global.set_master_port(int(cy['defw']['master-port']))
+			cdefw_global.set_parent_name(cy['defw']['parent-name'])
+			cdefw_global.set_parent_address(cy['defw']['parent-address'])
+			cdefw_global.set_parent_port(int(cy['defw']['parent-port']))
 			try:
-				cdefw_global.set_master_hostname(cy['defw']['master-hostname'])
+				cdefw_global.set_parent_hostname(cy['defw']['parent-hostname'])
 			except:
 				pass
 			cdefw_global.set_hostname(socket.gethostname())
@@ -1204,14 +1221,24 @@ def updater_thread():
 def connect_to_services(endpoints):
 	for ep in endpoints:
 		active_service_agents.connect(ep)
+		logging.debug(f"Connection request finished: {ep}")
+
+# TODO: We need a way to disconnect endpoint
+
+def get_resmgr():
+	return resmgr
+
+def get_self():
+	return me
 
 if not cdefw_global.get_defw_initialized():
 	defw_cfg = configure_defw()
 
 	py_log_path = cdefw_global.get_defw_tmp_dir()
 	Path(py_log_path).mkdir(parents=True, exist_ok=True)
+	printformat = "[%(asctime)s:%(filename)s:%(lineno)s:%(funcName)s()-> ] %(message)s"
 	logging.basicConfig(filename=os.path.join(py_log_path, "defw_py.log"),
-				filemode='w')
+				filemode='w', format=printformat)
 	setup_paths()
 
 	# All test results are stored in here

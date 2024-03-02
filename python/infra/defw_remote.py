@@ -1,6 +1,6 @@
 import defw_agent
 import cdefw_global
-from defw_exception import DEFwError
+from defw_exception import DEFwError, DEFwAgentNotFound
 from defw_common_def import load_pref
 from defw import me, get_agent
 import uuid
@@ -22,6 +22,9 @@ class BaseRemote(object):
 		else:
 			self.__remote = False
 			return
+
+		if not self.__agent:
+			raise DEFwAgentNotFound(f"agent not found {target}")
 
 		# We're going to have to handle a special case with service-apis.
 		# The module name for these calls are going to be something like:

@@ -45,7 +45,8 @@ class DEFwResMgr:
 			if ep == self.__my_ep and skip_self:
 				continue
 			client_api = BaseAgentAPI(target=ep)
-			aname = agent.get_name()
+			#aname = agent.get_name()
+			aname = agent.get_name()+"-"+str(ep.addr)+"-"+str(ep.pid)
 			db[aname] = \
 				{'agent': agent,
 				 'api': client_api,
@@ -68,7 +69,7 @@ class DEFwResMgr:
 		if not agent:
 			if ep.name in agent_dict:
 				agent_dict[ep.name]['state'] = \
-					agent_dict[ep.name]['state'] | AGENT_STATE_ERROR
+				agent_dict[ep.name]['state'] | AGENT_STATE_ERROR
 			DEFwAgentNotFound(f"Registeration from an unknown client {ep.name}")
 		self.__grab_agent_info({agent.get_name(): agent},
 				agent_dict, skep_self=True)

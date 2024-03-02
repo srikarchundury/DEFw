@@ -580,16 +580,16 @@ static void *defw_listener_main(void *usr_data)
 		/* Everyone registers with the resmgr, even the resmgr
 		 * registers with itself
 		 */
-		if (!resmgr_connected && strlen(get_master_name()) != 0 &&
+		if (!resmgr_connected && strlen(get_parent_name()) != 0 &&
 		    !resmgr_connect_in_progress) {
-			char *resmgr_name = get_master_name();
-			char *ip_addr = get_master_address();
-			int port = get_master_port();
+			char *resmgr_name = get_parent_name();
+			char *ip_addr = get_parent_address();
+			int port = get_parent_port();
 
 			PDEBUG("Attempting a connection on resmgr %s:%s:%d",
 			       resmgr_name, ip_addr, port);
-			rc = defw_connect_to_service(get_master_address(), get_master_port(),
-						    get_master_name(), get_master_hostname(),
+			rc = defw_connect_to_service(get_parent_address(), get_parent_port(),
+						    get_parent_name(), get_parent_hostname(),
 						    EN_DEFW_RESMGR, NULL, set_resmgr_connected);
 			if (rc == EN_DEFW_RC_IN_PROGRESS) {
 				pthread_mutex_lock(&global_var_mutex);

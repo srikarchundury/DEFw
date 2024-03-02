@@ -120,7 +120,7 @@ defw_rc_t python_run_interactive_shell(void)
 
 	/* import base defw module */
 	g_defw_cfg.initialized = true;
-	intro = "shell.interact('Welcome to the Intersect Framework (IFW)\\n"
+	intro = "shell.interact('Welcome to the Distributed Execution Framework (DEFw)\\n"
 		"Convenience Functions: \\n"
 		"\tR() = dumpGlobalTestResults()\\n"
 		"\tS() = services.dump()\\n"

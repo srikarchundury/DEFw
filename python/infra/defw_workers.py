@@ -46,6 +46,8 @@ class WorkerRequest:
 		self.wr_type = wr_type
 		self.req_uuid = uuid.uuid4()
 		self.deadline = time.time() + timeout
+		self.expected_events = [WorkerEvent.EVENT_CONN_COMPLETE,
+							    WorkerEvent.EVENT_REFRESH]
 		if wr_type == WorkerRequest.WR_SEND_MSG:
 			self.remote_uuid = remote_uuid
 			self.blk_uuid = blk_uuid
@@ -60,6 +62,8 @@ class WorkerRequest:
 		else:
 			self.queue = None
 
+		logging.debug(f"WorkRequest({self.wr_type}, {self.blocking}, {self.req_uuid})")
+
 	def __check_type(self, wr_type):
 		if wr_type != WorkerRequest.WR_SEND_MSG and \
 		   wr_type != WorkerRequest.WR_CONNECT:
@@ -68,6 +72,7 @@ class WorkerRequest:
 	def wait(self):
 		if not self.queue:
 			return None
+		logging.debug(f"Waiting for WorkRequest({self.wr_type}) {self.req_uuid} to complete")
 
 		t = time.time()
 		event = None
@@ -81,7 +86,9 @@ class WorkerRequest:
 			logging.debug(f"cur time {str(t)}, deadline {str(self.deadline)}")
 		if event and event.ev_type != WorkerEvent.EVENT_SHUTDOWN:
 			if event.ev_type == WorkerEvent.EVENT_CONN_COMPLETE:
+				logging.debug(f"Completed {self.wr_type} WorkRequest {self.req_uuid}")
 				return event.connect_status
+			logging.debug(f"Completed {self.wr_type} WorkRequest {self.req_uuid}")
 			return event.msg_yaml
 		raise DEFwCommError('Response timed out')
 

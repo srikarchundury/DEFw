@@ -47,7 +47,7 @@
 #define TEST_ROLE_RTR		"RTR"
 #define TEST_ROLE_CLI		"CLI"
 
-#define DEFAULT_MASTER_PORT	8282
+#define DEFAULT_PARENT_PORT	8282
 
 /* Framework Environment Variables needed from C */
 #define DEFW_PATH 		"DEFW_PATH" /* base installation path */

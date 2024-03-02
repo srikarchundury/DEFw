@@ -34,8 +34,9 @@ defw_help_usage(const struct option *long_options, const char *const description
 {
 	int i = 0;
 
-	fprintf(stderr, BOLDCYAN "defwp [option] ... [-c cmd | -m mod | file] [arg] ...\n"
-			RESET "Options and arguments (and corresponding environment variables):\n");
+	fprintf(stderr,
+		BOLDCYAN "defwp [option] ... [-c cmd | -m mod | file] [arg] ...\n"
+		RESET "Options and arguments (and corresponding environment variables):\n");
 
 	while ((long_options[i].name != NULL) && (description[i] != NULL)) {
 		fprintf(stderr, "\t-%c or --%s %s\n",

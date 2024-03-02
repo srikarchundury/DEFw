@@ -1,9 +1,9 @@
 defw:
     environment:
         DEFW_PATH: ${HOME}/ORNL/Quantum/QFw/defw
-    master-address: 127.0.0.1
-    master-port: 8090
-    master-name: resmgr
+    parent-address: 127.0.0.1
+    parent-port: 8090
+    parent-name: resmgr
     name: ${DEFW_AGENT_NAME}
     listen-port: ${DEFW_LISTEN_PORT}
     shell: cmdline

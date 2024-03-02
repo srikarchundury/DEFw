@@ -7,6 +7,7 @@ from defw_exception import DEFwError
 CID_COUNTER = 0
 QCR_VERBOSE = 1
 QRC_list = []
+g_qpm_initialized = False
 
 class CircuitStates:
 	UNDEF = 0
@@ -16,10 +17,11 @@ class CircuitStates:
 	DONE = 4
 
 class QRCInstance:
-	def __init__(self, qrc):
+	def __init__(self, qrc, pid):
 		self.instance = qrc
 		self.circuit_results = []
 		self.load = 0
+		self.pid = pid
 
 class Circuit:
 	def __init__(self):
@@ -111,7 +113,7 @@ class QPM:
 
 	def read_all_qrc_cqs(self):
 		for qrc in self.qrc_list:
-			while (res = qrc.instance.read_cq()):
+			while (res := qrc.instance.read_cq()):
 				qrc.circuit_results.append(res)
 				self.circuit[res['cid']].set_done()
 

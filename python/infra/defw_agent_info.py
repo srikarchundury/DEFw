@@ -91,7 +91,7 @@ class DEFwAgentInfo:
 			if s.get_service(Sfilter):
 				viable_services.append(s)
 
-		return viable_serices
+		return viable_services
 
 	def get_name(self):
 		return self.__name
