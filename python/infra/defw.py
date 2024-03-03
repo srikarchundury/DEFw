@@ -911,11 +911,12 @@ class Myself:
 		'''
 		Shutdown the DEFw
 		'''
+		services.finalize()
+		service_apis.finalize()
+		common.system_shutdown()
 		from defw_workers import put_shutdown
 		put_shutdown()
 		updater_thread.join()
-		services.finalize()
-		service_apis.finalize()
 		print("Shutting down the DEFw")
 		for thread in threading.enumerate():
 			logging.critical(f"- {thread.name} (ID: {thread.ident})")
@@ -1236,7 +1237,7 @@ if not cdefw_global.get_defw_initialized():
 
 	py_log_path = cdefw_global.get_defw_tmp_dir()
 	Path(py_log_path).mkdir(parents=True, exist_ok=True)
-	printformat = "[%(asctime)s:%(filename)s:%(lineno)s:%(funcName)s()-> ] %(message)s"
+	printformat = "[%(asctime)s:%(filename)s:%(lineno)s:%(funcName)s():Thread-%(thread)d]-> %(message)s"
 	logging.basicConfig(filename=os.path.join(py_log_path, "defw_py.log"),
 				filemode='w', format=printformat)
 	setup_paths()

@@ -128,8 +128,8 @@ static defw_rc_t process_msg_session_info(char *msg, defw_agent_blk_t *agent)
 	if (existing) {
 		existing->iRpcFd = agent->iFileDesc;
 		PDEBUG("existing = %p, agent = %p", existing, agent);
-		PDEBUG("Second connection on an existing agent is the RPC connection: %d",
-		       existing->iRpcFd);
+		PDEBUG("Second connection on an existing agent (%s) is the RPC connection: %d",
+		       existing->name, existing->iRpcFd);
 		if (ses->rpc_setup)
 			set_agent_state(existing, DEFW_AGENT_RPC_CHANNEL_CONNECTED);
 		/* release ref count acquired when you found the agent */
@@ -156,8 +156,6 @@ static defw_rc_t process_msg_session_info(char *msg, defw_agent_blk_t *agent)
 	else
 		defw_move_to_service_list(agent);
 
-	PDEBUG("First connection on a new agent is the Cntrl connection: %d",
-		agent->iFileDesc);
 	/* update the agent with the information */
 	uuid_copy(agent->id.remote_uuid, ses->agent_id.remote_uuid);
 	agent->node_type = agent_type;
@@ -171,6 +169,8 @@ static defw_rc_t process_msg_session_info(char *msg, defw_agent_blk_t *agent)
 	set_agent_state(agent, DEFW_AGENT_STATE_ALIVE);
 	unset_agent_state(agent, DEFW_AGENT_STATE_NEW);
 	gettimeofday(&agent->time_stamp, NULL);
+	PDEBUG("First connection on a new agent (%s) is the Cntrl connection: %d",
+		agent->name, agent->iFileDesc);
 
 	return EN_DEFW_RC_OK;
 }

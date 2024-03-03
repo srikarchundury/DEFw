@@ -149,9 +149,11 @@ defw_rc_t defw_start(int argc, char *argv[], bool daemon)
 			PERROR("chdir failed");
 			return EN_DEFW_RC_ERR_THREAD_STARTUP;
 		}
-	}
 
-	shell = handle_cmd_line_opt(argc, argv, &module, &cmd);
+		shell = EN_DEFW_RUN_DAEMON;
+	} else {
+		shell = handle_cmd_line_opt(argc, argv, &module, &cmd);
+	}
 
 	memset(&g_defw_cfg, 0, sizeof(g_defw_cfg));
 
@@ -210,6 +212,14 @@ defw_rc_t defw_start(int argc, char *argv[], bool daemon)
 		 */
 		defw_shutdown();
 		return rc;
+	case EN_DEFW_RUN_DAEMON:
+		rc = python_run_interactive_shell();
+		if (rc) {
+			PERROR("Failed to run python interactively");
+			defw_shutdown();
+			return rc;
+		}
+		break;
 	default:
 		PERROR("Unexpected shell type: %d\n", g_defw_cfg.shell);
 		defw_shutdown();

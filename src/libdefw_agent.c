@@ -223,6 +223,8 @@ static void close_agent_connection_unlocked(defw_agent_blk_t *agent)
 		closeTcpConnection(agent->iRpcFd);
 		agent->iRpcFd = -1;
 	}
+
+	python_refresh_agent();
 }
 
 static void close_agent_connection(defw_agent_blk_t *agent)

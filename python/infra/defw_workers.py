@@ -14,7 +14,8 @@ class WorkerEvent:
 	EVENT_INCOMING_RESPONSE = 2
 	EVENT_CONN_COMPLETE = 3
 	EVENT_REFRESH = 4
-	EVENT_SHUTDOWN = 5
+	EVENT_REFRESH_COMPLETE = 5
+	EVENT_SHUTDOWN = 6
 
 	def __init__(self, ev_type, connect_status=EN_DEFW_RC_OK, uuid=None, msg=None):
 		self.__check_type(ev_type)
@@ -32,6 +33,7 @@ class WorkerEvent:
 		   we_type != WorkerEvent.EVENT_INCOMING_RESPONSE and \
 		   we_type != WorkerEvent.EVENT_CONN_COMPLETE and \
 		   we_type != WorkerEvent.EVENT_REFRESH and \
+		   we_type != WorkerEvent.EVENT_REFRESH_COMPLETE and \
 		   we_type != WorkerEvent.EVENT_SHUTDOWN:
 			   raise DEFwError(f"Bad WorkerEvent type {we_type}")
 
@@ -46,16 +48,21 @@ class WorkerRequest:
 		self.wr_type = wr_type
 		self.req_uuid = uuid.uuid4()
 		self.deadline = time.time() + timeout
-		self.expected_events = [WorkerEvent.EVENT_CONN_COMPLETE,
-							    WorkerEvent.EVENT_REFRESH]
+		self.connect_status = -1
+		self.expected_events_lock = threading.Lock()
 		if wr_type == WorkerRequest.WR_SEND_MSG:
 			self.remote_uuid = remote_uuid
 			self.blk_uuid = blk_uuid
 			self.msg = msg
 			if not 'req-uuid' in self.msg['rpc']:
 				self.msg['rpc']['req-uuid'] = self.req_uuid
+			self.expected_events = [WorkerEvent.EVENT_INCOMING_RESPONSE]
 		elif wr_type == WorkerRequest.WR_CONNECT:
 			self.ep = ep
+			self.expected_events = [WorkerEvent.EVENT_CONN_COMPLETE,
+									WorkerEvent.EVENT_REFRESH]
+		else:
+			raise DEFwInternalError(f"Unexpected WR type {wr_type}")
 		self.blocking = blocking
 		if blocking:
 			self.queue = queue.Queue()
@@ -75,21 +82,38 @@ class WorkerRequest:
 		logging.debug(f"Waiting for WorkRequest({self.wr_type}) {self.req_uuid} to complete")
 
 		t = time.time()
-		event = None
 		while t < self.deadline:
+			event = None
 			try:
 				event = self.queue.get(timeout=1)
-				break
 			except queue.Empty:
 				pass
 			t = time.time()
 			logging.debug(f"cur time {str(t)}, deadline {str(self.deadline)}")
-		if event and event.ev_type != WorkerEvent.EVENT_SHUTDOWN:
-			if event.ev_type == WorkerEvent.EVENT_CONN_COMPLETE:
-				logging.debug(f"Completed {self.wr_type} WorkRequest {self.req_uuid}")
-				return event.connect_status
-			logging.debug(f"Completed {self.wr_type} WorkRequest {self.req_uuid}")
-			return event.msg_yaml
+			if event:
+				logging.debug(f"Completed {self.wr_type} ev: {event.ev_type} " \
+							  f"WorkRequest {self.req_uuid} exp {self.expected_events}")
+				if event.ev_type == WorkerEvent.EVENT_CONN_COMPLETE:
+					with self.expected_events_lock:
+						ev = self.expected_events[0]
+					if ev == WorkerEvent.EVENT_CONN_COMPLETE:
+						with self.expected_events_lock:
+							self.expected_events.remove(ev)
+						if len(self.expected_events) > 0:
+							self.connect_status = event.connect_status
+						else:
+							raise DEFwCommError("Expected to wait for a REFRESH COMPLETE")
+					else:
+						raise DEFwCommError(f"expected REFRESH_COMPLETE got {event.ev_type}")
+				elif event.ev_type == WorkerEvent.EVENT_REFRESH_COMPLETE:
+					with self.expected_events_lock:
+						if len(self.expected_events) > 0:
+							raise DEFwCommError(f"Unexpected pending Events: {self.expected_events}")
+					return self.connect_status
+				elif event.ev_type == WorkerEvent.EVENT_SHUTDOWN:
+					return None
+				else:
+					return event.msg_yaml
 		raise DEFwCommError('Response timed out')
 
 	def get_uuid(self):
@@ -123,8 +147,12 @@ class WorkerThread:
 			service_agents.reload()
 			active_client_agents.reload()
 			active_service_agents.reload()
-			logging.debug(f"Refreshed agent lists {me.is_resmgr()}")
 
+			# TODO: If the resource manager dies and comes up again, we'll
+			# still use the old resource manager. So we need a better way
+			# to notify python that the resource manager is dead and we
+			# need to recreate the API
+			#if not me.is_resmgr() and not defw.resmgr:
 			if not me.is_resmgr():
 				if 'Resource Manager' in service_apis:
 					defw.resmgr = service_apis['Resource Manager'].service_classes[0] \
@@ -133,8 +161,14 @@ class WorkerThread:
 					from defw import updater_queue
 					updater_queue.put({'type': 'resmgr', 'resmgr': defw.resmgr})
 		except Exception as e:
-			logging.critical("Couldn't refresh agents")
-			raise e
+			logging.debug("Calling system up")
+			if common.is_system_up():
+				logging.critical("Couldn't refresh agents")
+				raise e
+			pass
+		logging.debug("Feeding worker thread EVENT_REFRESH_COMPLETE")
+		we = WorkerEvent(WorkerEvent.EVENT_REFRESH_COMPLETE)
+		worker_thread.put_ev(we)
 
 	def spawn_temporary_worker(self, cb, *args, **kwargs):
 		tmp_thread = threading.Thread(target=cb, args=args, kwargs=kwargs)
@@ -160,27 +194,49 @@ class WorkerThread:
 				try:
 					with self.req_db_lock:
 						wr = self.req_db[we.msg_yaml['rpc']['req-uuid']]
+						del self.req_db[we.msg_yaml['rpc']['req-uuid']]
 					wr.queue.put(we)
 				except:
-					with self.req_db_lock:
-						logging.critical(f"Unmatched response. DB = {self.req_db}")
+					logging.critical(f"Unmatched response. DB = {self.req_db}")
 			elif we.ev_type == WorkerEvent.EVENT_REFRESH:
 				logging.debug("Refreshing Agents")
 				self.spawn_temporary_worker(self.refresh_agents)
+			elif we.ev_type == WorkerEvent.EVENT_REFRESH_COMPLETE:
+				del_entries = []
+				with self.req_db_lock:
+					for k, v in self.req_db.items():
+						logging.debug(f"Got a refresh event. looking at {k}:{v}")
+						# satisfy the event in order to avoid out of order
+						# refresh events which get misinterpreted
+						# TODO: Is there a bug here?
+						with v.expected_events_lock:
+							ev = v.expected_events[0]
+						if WorkerEvent.EVENT_REFRESH == ev:
+							v.queue.put(we)
+							with v.expected_events_lock:
+								v.expected_events.remove(ev)
+								if len(v.expected_events) == 0:
+									del_entries.append(k)
+						elif WorkerEvent.EVENT_REFRESH in v.expected_events:
+							raise DEFwCommError(f"Unordered events {v.expected_events}")
+					logging.debug(f"deleting entries from req_db {del_entries}")
+					for k in del_entries:
+						del self.req_db[k]
+				logging.debug("Finished handling refresh")
 			elif we.ev_type == WorkerEvent.EVENT_CONN_COMPLETE:
 				try:
 					with self.req_db_lock:
 						wr = self.req_db[we.uuid]
+					logging.debug(f"Queuing Event Complete on WR {we.uuid}")
 					wr.queue.put(we)
 				except:
-					with self.req_db_lock:
-						logging.critical(f"Unmatched response. DB = {self.req_db}")
+					logging.critical(f"Unmatched response. DB = {self.req_db}")
 			elif we.ev_type == WorkerEvent.EVENT_SHUTDOWN:
 				shutdown = True
 				# shutdown any waiting events
 				with self.req_db_lock:
 					for k, v in self.req_db.items():
-						v.queue.put(WorkerEvent.EVENT_SHUTDOWN)
+						v.queue.put(we)
 				logging.debug("Worker thread shutdown")
 			else:
 				logging.critical(f"Bug. Unknown event {we.ev_type}")
@@ -301,6 +357,7 @@ def put_shutdown():
 	from defw import updater_queue
 	updater_queue.put({'type': 'shutdown'})
 	# TODO need to uninitialize all active services
+	logging.debug("Putting Shutdown")
 
 def put_request(msg, uuid):
 	try:
@@ -309,6 +366,7 @@ def put_request(msg, uuid):
 		worker_thread.put_ev(we)
 	except:
 		logging.critical(f"Recieved a bad request:\n{msg}")
+	logging.debug("Putting request")
 
 def put_response(msg, uuid):
 	try:
@@ -317,15 +375,18 @@ def put_response(msg, uuid):
 		worker_thread.put_ev(we)
 	except:
 		logging.critical(f"Recieved a bad response:\n{msg}")
+	logging.debug("Putting response")
 
 def put_refresh():
 	we = WorkerEvent(WorkerEvent.EVENT_REFRESH)
 	worker_thread.put_ev(we)
+	logging.debug("Putting refresh")
 
 def put_connect_complete(status, uuid_str):
 	we = WorkerEvent(WorkerEvent.EVENT_CONN_COMPLETE,
 					 connect_status=status, uuid=uuid.UUID(uuid_str))
 	worker_thread.put_ev(we)
+	logging.debug("Putting connect complete")
 
 def send_rsp(wr):
 	rc = defw_send_rsp(wr.remote_uuid,

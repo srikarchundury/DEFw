@@ -1,6 +1,6 @@
 from defw_exception import DEFwCommError, DEFwAgentNotFound
 from .svc_qpm import QPM, QRC_list, QRCInstance, g_qpm_initialized
-#from defw import resmgr, me
+import cdefw_global
 import defw
 import sys, os, threading, logging
 from time import sleep
@@ -59,27 +59,41 @@ def spawn_qrc(res, port):
 	qrc_name = 'DEFwLauncher'+str(port)
 
 	env =  {'DEFW_AGENT_NAME': qrc_name,
-			'DEFW_LISTEN_PORT': port,
-			'DEFW_AGENT_TYPE': 'daemon',
+			'DEFW_LISTEN_PORT': str(port),
+			'DEFW_ONLY_LOAD_MODULE': 'svc_qrc',
+			'DEFW_SHELL_TYPE': 'daemon',
+			'DEFW_AGENT_TYPE': 'service',
 			'DEFW_PARENT_ADDR': my_ep.addr,
-			'DEFW_PARENT_PORT': my_ep.port,
+			'DEFW_PARENT_PORT': str(my_ep.port),
+		 #'DEFW_PARENT_PORT': str(8474),
 			'DEFW_PARENT_NAME': my_ep.name,
+			'DEFW_LOG_DIR': os.path.join(os.path.split(cdefw_global.get_defw_tmp_dir())[0], qrc_name),
 			'DEFW_PARENT_HNAME': my_ep.hostname}
 
 	# . Add each QRC endpoint on the QPM list
 	# . QPM will subsequently post messages on each of the QRCs
 	ep = defw.resmgr.reserve(defw.me.my_endpoint(), res)
 	# TODO have to have a corresponding disconnect from service
-	logging.debug(f"---->connect to launcher {ep}")
+	logging.debug(f"connect to launcher {ep}")
 	defw.connect_to_services(ep)
 	class_obj = getattr(defw.service_apis['Launcher'],
 						res[list(res.keys())[0]]['api'])
 	launcher_api = class_obj(ep[0])
-	pid = launcher_api.launch("defwp", env=env)
+
+	pid = launcher_api.launch("/home/a2e/ORNL/Quantum/QFw/defw/src/defwp", env=env)
+	logging.debug(f"Launched {qrc_name} with {pid}")
+	qrc_inst = QRCInstance(pid)
+	QRC_list.append(qrc_inst)
+	if launcher_api in g_launchers.keys():
+		g_launchers[launcher_api].append(qrc_inst)
+	else:
+		g_launchers[launcher_api] = [qrc_inst]
+
 	# Make sure that QRC has connected to me.
 	wait = 0
+	started = False
 	while wait < 5:
-		if qrc_name not in service_agents:
+		if qrc_name in defw.service_agents:
 			started = True
 			break
 		logging.debug("Waiting for QRC to start up")
@@ -88,14 +102,9 @@ def spawn_qrc(res, port):
 	if not started:
 		uninitialize()
 		raise DEFwAgentNotFound(f"{qrc_name} did not start")
-	class_obj = getattr(service_apis[qrc_name], r[qrc_name]['api'])
-	qrc_api = class_obj(ep[0])
-	QRC_list.append(QRCInstance(qrc_api, pid))
-
-	if launcher_api in g_launchers.keys():
-		g_launchers[launcher_api].append(qrc_api)
-	else:
-		g_launchers[launcher_api] = [qrc_api]
+	qrc_ep = defw.service_agents[qrc_name].get_ep()
+	qrc_api = defw.service_apis['QRC'].QRC(qrc_ep)
+	qrc_inst.add_qrc(qrc_api)
 
 def start_qrcs(num_qrc, host_list):
 	import yaml

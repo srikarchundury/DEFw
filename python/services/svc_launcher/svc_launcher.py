@@ -1,22 +1,30 @@
 from defw_agent_info import *
 from defw_util import prformat, fg, bg
 from defw import me
-import os, subprocess
+import os, subprocess, copy, yaml
 from defw_exception import DEFwError
 
 class Process:
 	def __init__(self, cmd, env, path):
 		if path:
-			self.__cmd = os.path.join(path, proc)
+			self.__cmd = os.path.join(path, proc).split()
 		else:
-			self.__cmd = cmd
+			self.__cmd = cmd.split()
 		self.__pid = 0
 		self.__process = None
-		self.__env = env
+		self.__env = copy.deepcopy(dict(os.environ))
+		for k, v in env.items():
+			self.__env[k] = v
 
 	def launch(self):
-		self.__process = subprocess.Popen(self.__cmd, env=self.__env, shell=True)
-		self.__proc = self.__process.pid
+		print(self.__cmd)
+		print(yaml.dump(self.__env))
+
+		self.__process = subprocess.Popen(self.__cmd, env=self.__env,
+						stdout=subprocess.DEVNULL , stderr=subprocess.DEVNULL,
+						stdin=subprocess.PIPE, start_new_session=True)
+		self.__pid = self.__process.pid
+		return self.__pid
 
 	def kill(self):
 		self.__process.kill()
@@ -38,19 +46,23 @@ class Launcher:
 		return proc.getpid()
 
 	def kill(self, pid):
+		print(f"killing {pid} {self.__proc_dict.keys()}")
 		if pid in self.__proc_dict.keys():
-			self.__proc_dict[proc.getpid()].kill()
-			del self.__proc_dict[proc.getpid()]
+			print(f"killing {pid}")
+			self.__proc_dict[pid].kill()
+			print(f"removing {pid}")
+			del self.__proc_dict[pid]
+		print(f"killed {pid}")
 
 	def terminate(self, pid):
 		if pid in self.__proc_dict.keys():
-			self.__proc_dict[proc.getpid()].kill()
+			self.__proc_dict[pid].kill()
 			del self.__proc_dict[proc.getpid()]
 
 	def shutdown(self):
 		for pid, proc in self.__proc_dict:
-			proc.kill()
 			del self.__proc_dict[proc.getpid()]
+			proc.kill()
 
 	def query(self):
 		from . import svc_info
@@ -59,6 +71,9 @@ class Launcher:
 		info = DEFwAgentInfo(self.__class__.__name__,
 						  self.__class__.__module__, [svc])
 		return info
+
+	def test(self):
+		logging.debug("Testing Launcher")
 
 	def reserve(self, svc, client_ep, *args, **kwargs):
 		logging.debug(f"{client_ep} reserved the {svc}")

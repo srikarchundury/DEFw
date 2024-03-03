@@ -8,3 +8,14 @@ class Launcher(BaseRemote):
 	def launch(self, proc, path=''):
 		pass
 
+	def kill(self, pid):
+		pass
+
+	def terminate(self, pid):
+		pass
+
+	def shutdown(self):
+		pass
+
+	def test(self):
+		pass

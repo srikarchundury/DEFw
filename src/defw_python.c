@@ -120,6 +120,7 @@ defw_rc_t python_run_interactive_shell(void)
 
 	/* import base defw module */
 	g_defw_cfg.initialized = true;
+
 	intro = "shell.interact('Welcome to the Distributed Execution Framework (DEFw)\\n"
 		"Convenience Functions: \\n"
 		"\tR() = dumpGlobalTestResults()\\n"
@@ -135,7 +136,6 @@ defw_rc_t python_run_interactive_shell(void)
 		"\\tservices - Available services to offer\\n"
 		"\\tservice_apis - Available service interface APIs\\n')";
 	RUN_PYTHON_CMD(intro);
-
 
 	return EN_DEFW_RC_OK;
 }
@@ -364,7 +364,9 @@ void python_update_interactive_shell(void)
 	Py_DECREF(locals);
 	Py_DECREF(globals);
 	Py_DECREF(globals_copy);
-	Py_DECREF(g_interactive_shell);
+	// TODO: Causes interactive shell to exit. Not sure if it's even
+	// needed at this point
+	//Py_DECREF(g_interactive_shell);
 	python_gil_release(gstate);
 	pthread_mutex_unlock(&g_interactive_shell_mutex);
 }

@@ -11,4 +11,4 @@ export DEFW_PARENT_HNAME=PC0136298
 export DEFW_SHELL_TYPE=interactive
 export DEFW_LOG_LEVEL=all
 export DEFW_LOG_DIR=$HOME/tmp/${DEFW_AGENT_NAME}
-export DEFW_ONLY_LOAD_MODULE=svc_qpm,api_launcher
+export DEFW_ONLY_LOAD_MODULE=svc_qpm,api_launcher,api_qrc

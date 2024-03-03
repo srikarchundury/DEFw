@@ -25,4 +25,5 @@ class QPM(BaseRemote):
 	def peek_cq(self, cid=None):
 		pass
 
-
+	def test(self):
+		pass

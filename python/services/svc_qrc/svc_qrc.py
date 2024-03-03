@@ -212,3 +212,5 @@ class QRC:
 		self.create_circuit(cid, qasm)
 		return self.runner_queue.put(cid)
 
+	def test(self):
+		logging.debug("Testing the QRC")

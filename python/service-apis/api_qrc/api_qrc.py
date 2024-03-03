@@ -13,4 +13,5 @@ class QRC(BaseRemote):
 	def read_cq(self, cid=None):
 		pass
 
-
+	def test(self):
+		pass

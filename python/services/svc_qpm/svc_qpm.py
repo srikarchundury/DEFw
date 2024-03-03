@@ -17,11 +17,14 @@ class CircuitStates:
 	DONE = 4
 
 class QRCInstance:
-	def __init__(self, qrc, pid):
+	def __init__(self, pid, qrc=None):
 		self.instance = qrc
 		self.circuit_results = []
 		self.load = 0
 		self.pid = pid
+
+	def add_qrc(self, qrc):
+		self.instance = qrc
 
 class Circuit:
 	def __init__(self):
@@ -175,4 +178,7 @@ class QPM:
 
 	def release(self, services):
 		self.runner_shutdown = True
+
+	def test(self):
+		return "****QPM Test Successful****"
 

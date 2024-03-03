@@ -18,6 +18,7 @@ DEFW_SCRIPT_PATHS = ['src/',
 		     'python/config',
 		     'python/experiments']
 MIN_IFS_NUM_DEFAULT = 3
+g_system_shutdown = False
 
 def get_rpc_rsp_base():
 	return {'rpc': {'dst': None, 'src': None, 'type': 'results', 'rc': None}}
@@ -28,6 +29,16 @@ def get_rpc_req_base():
 			'parameters': {'args': None, 'kwargs': None}}}
 
 global_class_db = {}
+
+def system_shutdown():
+	global g_system_shutdown
+	logging.debug("System Shutting down")
+	g_system_shutdown = True
+
+def is_system_up():
+	global g_system_shutdown
+	logging.debug(f"System is {not g_system_shutdown}")
+	return not g_system_shutdown
 
 def add_to_class_db(instance, class_id):
 	if class_id in global_class_db:
