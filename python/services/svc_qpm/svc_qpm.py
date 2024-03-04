@@ -3,11 +3,14 @@ from defw_util import prformat, fg, bg
 from defw import me
 import logging, uuid, time, queue, threading, logging
 from defw_exception import DEFwError
+import sys, os
+
+sys.path.append(os.path.split(os.path.abspath(__file__))[0])
+import qpm_common as common
+
 
 CID_COUNTER = 0
 QCR_VERBOSE = 1
-QRC_list = []
-g_qpm_initialized = False
 
 class CircuitStates:
 	UNDEF = 0
@@ -77,7 +80,6 @@ class QPM:
 		self.circuits = {}
 		self.runner_queue = queue.Queue()
 		self.circuit_results = []
-		self.qrc_list = QRC_list
 		self.qrc_rr = 0
 
 	def create_circuit(self, qasm, nbits=1, endpoint=None):
@@ -98,15 +100,17 @@ class QPM:
 
 	def sync_run(self, cid):
 		circuit = self.circuits[cid]
-		qrc = self.qrc_list[len(self.qrc_list) % self.qrc_rr]
+		qrc = common.QRC_list[self.qrc_rr % len(common.QRC_list)]
 		qrc.load += 1
 		self.qrc_rr += 1
+
+		logging.debug(f"Running {cid}\n{circuit.qasm}")
 
 		return qrc.instance.sync_run(cid, circuit.qasm)
 
 	def async_run(self, cid):
 		circuit = self.circuits[cid]
-		qrc = self.qrc_list[len(self.qrc_list) % self.qrc_rr]
+		qrc = common.QRC_list[self.qrc_rr % len(common.QRC_list)]
 		qrc.load += 1
 		circuit.assigned_qrc = qrc
 		circuit.set_running()
@@ -115,7 +119,7 @@ class QPM:
 		return qrc.instance.async_run(cid, circuit.qasm)
 
 	def read_all_qrc_cqs(self):
-		for qrc in self.qrc_list:
+		for qrc in common.QRC_list:
 			while (res := qrc.instance.read_cq()):
 				qrc.circuit_results.append(res)
 				self.circuit[res['cid']].set_done()
@@ -134,7 +138,7 @@ class QPM:
 					return r
 				i += 1
 		else:
-			for qrc in self.qrc_list:
+			for qrc in common.QRC_list:
 				if len(qrc.circuit_results) > 0:
 					r = qrc.circuit_results.pop(0)
 					return r
@@ -153,7 +157,7 @@ class QPM:
 					return e
 				i += 1
 		else:
-			for qrc in self.qrc_list:
+			for qrc in common.QRC_list:
 				if len(qrc.circuit_results) > 0:
 					return qrc.circuit_results[0]
 		return None

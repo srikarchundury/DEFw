@@ -205,6 +205,7 @@ class QRC:
 		return results
 
 	def sync_run(self, cid, qasm):
+		logging.debug(f"Running {cid}\n{qasm}")
 		self.create_circuit(cid, qasm)
 		return self.run_circuit(cid)
 

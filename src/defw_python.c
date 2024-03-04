@@ -337,37 +337,39 @@ defw_rc_t python_handle_connect_complete(defw_rc_t status, char *uuid)
 
 void python_update_interactive_shell(void)
 {
-	PyGILState_STATE gstate;
-	PyObject *defw, *globals, *locals, *globals_copy;
+//	PyGILState_STATE gstate;
+//	PyObject *defw, *globals, *locals, *globals_copy;
 	/*
 	PyObject *key, *value;
 	Py_ssize_t pos = 0;
 	*/
 
-	if (!g_interactive_shell)
-		return;
+//	if (!g_interactive_shell)
+//		return;
 
-	pthread_mutex_lock(&g_interactive_shell_mutex);
-	gstate = python_gil_ensure();
-	defw = PyImport_AddModule("defw");
-	globals = PyModule_GetDict(defw);
+//	fprintf(stderr, "Updating interactive shell\n");
+
+//	pthread_mutex_lock(&g_interactive_shell_mutex);
+//	gstate = python_gil_ensure();
+//	defw = PyImport_AddModule("defw");
+//	globals = PyModule_GetDict(defw);
 	/*
 	while (PyDict_Next(globals, &pos, &key, &value)) {
 		printf("Key: %s\n", PyUnicode_AsUTF8(key));
 		printf("Value (str): %s\n", PyUnicode_AsUTF8(PyObject_Str(value)));
 	}
 	*/
-	locals = PyObject_GetAttrString(g_interactive_shell, "locals");
-	globals_copy = PyDict_Copy(globals);
-	PyDict_Update(locals, globals_copy);
-	Py_DECREF(defw);
-	Py_DECREF(locals);
-	Py_DECREF(globals);
-	Py_DECREF(globals_copy);
+//	locals = PyObject_GetAttrString(g_interactive_shell, "locals");
+//	globals_copy = PyDict_Copy(globals);
+//	PyDict_Update(locals, globals_copy);
+//	Py_DECREF(defw);
+//	Py_DECREF(locals);
+//	Py_DECREF(globals);
+//	Py_DECREF(globals_copy);
 	// TODO: Causes interactive shell to exit. Not sure if it's even
 	// needed at this point
 	//Py_DECREF(g_interactive_shell);
-	python_gil_release(gstate);
-	pthread_mutex_unlock(&g_interactive_shell_mutex);
+//	python_gil_release(gstate);
+//	pthread_mutex_unlock(&g_interactive_shell_mutex);
 }
 

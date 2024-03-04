@@ -36,6 +36,10 @@ class Endpoint:
 	def is_resmgr(self):
 		return self.node_type == EN_DEFW_RESMGR
 
+	def get_id(self):
+		#return f"{self.name}-{self.addr}:{self.port}-{self.pid}"
+		return self.remote_uuid
+
 	def get(self):
 		info = {self.name: {'remote uuid': self.remote_uuid,
 					'block uuid': self.blk_uuid,
@@ -206,6 +210,12 @@ class DEFwAgents:
 		defw_workers.connect_to_agent(wr)
 		self.reload()
 
+	def get_key_by_name(self, name):
+		for k, v in self.agent_dict.items():
+			if v.get_name() == name:
+				return k
+		return ''
+
 	def reload(self):
 		self.agent_dict = {}
 		self.max = 0
@@ -229,7 +239,7 @@ class DEFwAgents:
 							blk_uuid = blk_uuid)
 					if agent.name not in self.agent_dict:
 						self.max += 1
-					self.agent_dict[agent.name] = Agent(ep)
+					self.agent_dict[ep.get_id()] = Agent(ep)
 					defw_release_agent_blk_unlocked(agent, False)
 		except:
 			pass

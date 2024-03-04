@@ -1,5 +1,7 @@
 from .svc_launcher import Launcher
-import sys
+import sys, os
+sys.path.append(os.path.split(os.path.abspath(__file__))[0])
+import launcher_common as common
 
 # This is used by the infrastructure to display information about
 # the service module. The name is also used as a key through out the
@@ -20,5 +22,6 @@ def initialize():
 	pass
 
 def uninitialize():
+	common.shutdown = True
 	pass
 

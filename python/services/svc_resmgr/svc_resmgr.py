@@ -46,7 +46,7 @@ class DEFwResMgr:
 				continue
 			client_api = BaseAgentAPI(target=ep)
 			#aname = agent.get_name()
-			aname = agent.get_name()+"-"+str(ep.addr)+"-"+str(ep.pid)
+			aname = ep.get_id()
 			db[aname] = \
 				{'agent': agent,
 				 'api': client_api,

@@ -1184,22 +1184,24 @@ def configure_defw():
 	return cy
 
 def get_spec_agent(target, agent_dict):
-	if target.name in agent_dict and \
-		target.remote_uuid == agent_dict[target.name].get_remote_uuid() and \
-		(target.blk_uuid ==  agent_agents[target.name].get_blk_uuid() or \
+	agidx = target.get_id()
+	if agidx in agent_dict and \
+		target.remote_uuid == agent_dict[agidx].get_remote_uuid() and \
+		(target.blk_uuid ==  agent_agents[agidx].get_blk_uuid() or \
 		 target.blk_uuid == str(uuid.UUID(int=0))):
-		return agent_dict[target.name]
+		return agent_dict[agidx]
 	return None
 
 def get_agent(target):
 	agents = [active_service_agents, service_agents, active_client_agents,
 			  client_agents]
 	for agent_dict in agents:
-		if target.name in agent_dict and \
-		   target.remote_uuid == agent_dict[target.name].get_remote_uuid() and \
-		   (target.blk_uuid ==  agent_dict[target.name].get_blk_uuid() or \
+		agidx = target.get_id()
+		if agidx in agent_dict and \
+		   target.remote_uuid == agent_dict[agidx].get_remote_uuid() and \
+		   (target.blk_uuid ==  agent_dict[agidx].get_blk_uuid() or \
 			target.blk_uuid == str(uuid.UUID(int=0))):
-			return agent_dict[target.name]
+			return agent_dict[agidx]
 	return None
 
 updater_queue = queue.Queue()

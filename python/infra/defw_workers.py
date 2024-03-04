@@ -83,6 +83,8 @@ class WorkerRequest:
 
 		t = time.time()
 		while t < self.deadline:
+			if not common.is_system_up():
+				return None
 			event = None
 			try:
 				event = self.queue.get(timeout=1)
