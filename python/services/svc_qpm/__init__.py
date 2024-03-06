@@ -68,6 +68,7 @@ def connect_to_launcher(res):
 	return launcher_api
 
 def spawn_qrc(launcher_api, port):
+	global g_timeout
 	#from defw import resmgr, connect_to_services
 
 	my_ep = defw.me.my_endpoint()
@@ -80,7 +81,6 @@ def spawn_qrc(launcher_api, port):
 			'DEFW_AGENT_TYPE': 'service',
 			'DEFW_PARENT_ADDR': my_ep.addr,
 			'DEFW_PARENT_PORT': str(my_ep.port),
-		 #'DEFW_PARENT_PORT': str(8474),
 			'DEFW_PARENT_NAME': my_ep.name,
 			'DEFW_LOG_DIR': os.path.join(os.path.split(cdefw_global.get_defw_tmp_dir())[0], qrc_name),
 			'DEFW_PARENT_HNAME': my_ep.hostname}
@@ -98,7 +98,7 @@ def spawn_qrc(launcher_api, port):
 	wait = 0
 	started = False
 	qrc_key = ''
-	while wait < 5:
+	while wait < g_timeout:
 		qrc_key = defw.service_agents.get_key_by_name(qrc_name)
 		if qrc_key:
 			started = True
@@ -116,6 +116,7 @@ def spawn_qrc(launcher_api, port):
 
 def start_qrcs(num_qrc, host_list):
 	import yaml
+	global g_timeout
 	len_host_list = len(host_list)
 
 	# get a list of all the launchers
@@ -124,20 +125,23 @@ def start_qrcs(num_qrc, host_list):
 	# For each launcher query the number of GPUs
 	# Based on the number of GPUs tell the launcher to start a QRC per GPU
 	# and bind it to the GPU
-	num_itr = 0
+	wait = 0
+	res = {}
 	complete = False
 	found_hosts = []
 	found_launchers = []
-	res = defw.resmgr.get_services('Launcher')
 	logging.debug(f"Here are the available launchers: {res}")
-	while (num_itr < 10 and len(res) > 0):
+	while len(res) >= 0:
+		if wait >= g_timeout:
+			break
+		res = defw.resmgr.get_services('Launcher')
 		for k, r in res.items():
 			if r['residence'].hostname in host_list and \
 			   r['residence'].hostname not in found_hosts:
 				found_hosts.append(r['residence'].hostname)
 				found_launchers.append({k:r})
-		if not len(found_hosts) == len_host_list and num_itr < 10:
-			num_itr += 1
+		if len(found_hosts) != len_host_list:
+			wait += 1
 			logging.debug("Waiting to connect to launcher")
 			sleep(1)
 		else:
@@ -206,8 +210,15 @@ def qpm_wait_resmgr():
 		qpm_complete_init()
 
 def initialize():
+	global g_timeout
+
 	if common.g_qpm_initialized:
 		return
+
+	try:
+		g_timeout = int(os.environ['QFW_STARTUP_TIMEOUT'])
+	except:
+		g_timeout = 40
 
 	if not defw.resmgr:
 		# we haven't connected to the resmgr yet. Spin up a thread and
