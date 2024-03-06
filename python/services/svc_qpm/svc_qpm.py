@@ -20,11 +20,16 @@ class CircuitStates:
 	DONE = 4
 
 class QRCInstance:
-	def __init__(self, pid, qrc=None):
+	STATUS_UNKNOWN = 1
+	STATUS_CONNECTED = 2
+
+	def __init__(self, pid, name, qrc=None):
 		self.instance = qrc
+		self.name = name
 		self.circuit_results = []
 		self.load = 0
 		self.pid = pid
+		self.status = QRCInstance.STATUS_UNKNOWN
 
 	def add_qrc(self, qrc):
 		self.instance = qrc

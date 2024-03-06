@@ -67,10 +67,40 @@ def connect_to_launcher(res):
 	launcher_api = class_obj(ep[0])
 	return launcher_api
 
-def spawn_qrc(launcher_api, port):
+def wait_for_all_qrcs():
 	global g_timeout
-	#from defw import resmgr, connect_to_services
+	# Make sure that the QRCs have connected to me.
+	wait = 0
+	started = False
+	qrc_key = ''
+	total = len(common.QRC_list)
+	connected = 0
+	while wait < g_timeout:
+		if total == connected:
+			started = True
+			break
+		for qrc_inst in common.QRC_list:
+			if qrc_inst.status == QRCInstance.STATUS_CONNECTED:
+				continue
+			qrc_key = defw.service_agents.get_key_by_name(qrc_inst.name)
+			if not qrc_key:
+				continue
+			qrc_ep = defw.service_agents[qrc_key].get_ep()
+			qrc_api = defw.service_apis['QRC'].QRC(qrc_ep)
+			qrc_inst.add_qrc(qrc_api)
+			qrc_inst.status = QRCInstance.STATUS_CONNECTED
+			connected += 1
+			logging.debug(f"QRC {qrc_inst.name} with key {qrc_key} connected")
 
+		logging.debug("Waiting for QRC to start up")
+		wait += 1
+		sleep(1)
+	if not started:
+		uninitialize()
+		raise DEFwAgentNotFound(f"{qrc_name} did not start")
+	logging.debug("All QRCs connected")
+
+def spawn_qrc(launcher_api, port):
 	my_ep = defw.me.my_endpoint()
 	qrc_name = 'DEFwLauncher'+str(port)
 
@@ -85,34 +115,15 @@ def spawn_qrc(launcher_api, port):
 			'DEFW_LOG_DIR': os.path.join(os.path.split(cdefw_global.get_defw_tmp_dir())[0], qrc_name),
 			'DEFW_PARENT_HNAME': my_ep.hostname}
 
-	pid = launcher_api.launch("/home/a2e/ORNL/Quantum/QFw/defw/src/defwp", env=env)
+	bin_path = os.environ['QFW_QRC_BIN_PATH']
+	pid = launcher_api.launch(bin_path, env=env)
 	logging.debug(f"Launched {qrc_name} with {pid}")
-	qrc_inst = QRCInstance(pid)
+	qrc_inst = QRCInstance(pid, qrc_name)
 	common.QRC_list.append(qrc_inst)
 	if launcher_api in g_launchers.keys():
 		g_launchers[launcher_api].append(qrc_inst)
 	else:
 		g_launchers[launcher_api] = [qrc_inst]
-
-	# Make sure that QRC has connected to me.
-	wait = 0
-	started = False
-	qrc_key = ''
-	while wait < g_timeout:
-		qrc_key = defw.service_agents.get_key_by_name(qrc_name)
-		if qrc_key:
-			started = True
-			break
-		logging.debug("Waiting for QRC to start up")
-		wait += 1
-		sleep(1)
-	if not started:
-		uninitialize()
-		raise DEFwAgentNotFound(f"{qrc_name} did not start")
-	logging.debug(f"{qrc_name}:{pid} started")
-	qrc_ep = defw.service_agents[qrc_key].get_ep()
-	qrc_api = defw.service_apis['QRC'].QRC(qrc_ep)
-	qrc_inst.add_qrc(qrc_api)
 
 def start_qrcs(num_qrc, host_list):
 	import yaml
@@ -179,6 +190,8 @@ def start_qrcs(num_qrc, host_list):
 			for i in range(0, num_qrc_pn):
 				base_port += 1
 				spawn_qrc(api, base_port)
+
+	wait_for_all_qrcs()
 
 	logging.debug(f"QPM Initialized: {common.QRC_list}")
 	common.g_qpm_initialized = True

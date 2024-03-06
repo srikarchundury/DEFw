@@ -14,3 +14,4 @@ export DEFW_LOG_DIR=$HOME/tmp/${DEFW_AGENT_NAME}
 export DEFW_ONLY_LOAD_MODULE=svc_qpm,api_launcher,api_qrc
 export QFW_BASE_QRC_PORT=9100
 export QFW_NUM_QRC=1
+export QFW_QRC_BIN_PATH="/home/a2e/ORNL/Quantum/QFw/defw/src/defwp"
