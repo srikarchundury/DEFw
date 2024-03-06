@@ -20,6 +20,9 @@ Beside DEFW_CONFIG_PATH all the other environment variables are used in
 the YAML configuration file directly. This allows us to have only one YAML
 file used for everything.
 
-QFW_BASE_QRC_PORT: The base QRC listen port
-QFW_NUM_QRC: The number of QRC processes to start
+These are QFw environment variables needed
 
+QFW_BASE_QRC_PORT: (optional. Defaults to 9000) The base QRC listen port
+QFW_NUM_QRC: (optional. Defaults to 1) The number of QRC processes to start
+QFW_QRC_BIN_PATH: (mandatory) The binary path to the QRC
+QFW_STARTUP_TIMEOUT: (optional. Defaults to 40s) Timeout used in the QFW for waiting for processes to startup
