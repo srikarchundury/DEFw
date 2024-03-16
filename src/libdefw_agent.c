@@ -9,6 +9,8 @@
 #include <assert.h>
 #include <errno.h>
 #include <uuid/uuid.h>
+#include <sys/types.h>
+#include <netdb.h>
 #include "defw_global.h"
 #include "defw_agent.h"
 #include "libdefw_agent.h"
@@ -703,6 +705,35 @@ defw_rc_t defw_send_hb(defw_agent_blk_t *agent)
 	return rc;
 }
 
+static
+defw_rc_t hostname_to_ip(char *hostname, char *ip, int len)
+{
+	struct addrinfo hints, *servinfo, *p;
+	struct sockaddr_in *h;
+	int rv;
+
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+
+	rv = getaddrinfo(hostname, NULL, &hints, &servinfo);
+	if (rv != 0) {
+		PERROR("getaddrinfo: %s", gai_strerror(rv));
+		return EN_DEFW_RC_BAD_ADDR;
+	}
+
+	memset(ip, 0, len);
+	for (p = servinfo; p != NULL; p = p->ai_next) {
+		h = (struct sockaddr_in *) p->ai_addr;
+		strncpy(ip, inet_ntoa(h->sin_addr), len-1);
+		PDEBUG("hostname %s has ip %s", hostname, ip);
+		break;
+	}
+
+	freeaddrinfo(servinfo);
+	return EN_DEFW_RC_OK;
+}
+
 static void *defw_connect_to_agent_thread(void *user_data)
 {
 	struct sockaddr_in sockaddr;
@@ -718,8 +749,18 @@ static void *defw_connect_to_agent_thread(void *user_data)
 	struct dlist_entry *list = req->list;
 	defw_connect_status status_cb = req->status_cb;
 	socklen_t  tCliLen;
+	char ip[MAX_STR_LEN];
+	struct sockaddr_in tmp_addr;
 
 	uuid_copy(req_uuid, req->uuid);
+
+	if (strlen(hostname) != 0) {
+		/* check if a valid parent_hostname is provided. If it is,
+		 * let's use it instead of the ip address
+		 */
+		if (!hostname_to_ip(hostname, ip, MAX_STR_LEN))
+			ip_addr = ip;
+	}
 
 	if (!inet_aton(ip_addr, &sockaddr.sin_addr)) {
 		rc = EN_DEFW_RC_BAD_ADDR;
@@ -779,8 +820,9 @@ static void *defw_connect_to_agent_thread(void *user_data)
 
 	/* get socket information for the iFileDesc */
 	tCliLen = sizeof(agent->addr);
-	getsockname(agent->iFileDesc, (struct sockaddr *)&agent->addr,
+	getsockname(agent->iFileDesc, (struct sockaddr *)&tmp_addr,
 		    &tCliLen);
+	agent->addr.sin_port = tmp_addr.sin_port;
 	PDEBUG("Active port = %d\n", agent->addr.sin_port);
 
 	MUTEX_LOCK(&agent_array_mutex);

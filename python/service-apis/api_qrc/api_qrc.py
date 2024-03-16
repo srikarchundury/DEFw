@@ -4,10 +4,10 @@ class QRC(BaseRemote):
 	def __init__(self, ep):
 		super().__init__(target=ep)
 
-	def sync_run(self, cid, qasm):
+	def sync_run(self, cid, info):
 		pass
 
-	def async_run(self, cid, qasm):
+	def async_run(self, cid, info):
 		pass
 
 	def read_cq(self, cid=None):

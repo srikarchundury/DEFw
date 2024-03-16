@@ -229,9 +229,10 @@ static defw_rc_t process_msg_get_num_agents(char *msg, defw_agent_blk_t *agent)
 static defw_rc_t process_agent_message(defw_agent_blk_t *agent, int fd)
 {
 	defw_rc_t rc = EN_DEFW_RC_OK;
-	defw_message_hdr_t hdr;
+	defw_message_hdr_t hdr = {0};
 	char *buffer;
 	msg_process_fn_t proc_fn;
+	int cmp;
 
 	/* get the header first */
 	rc = readTcpMessage(fd, (char *)&hdr, sizeof(hdr),
@@ -248,9 +249,12 @@ static defw_rc_t process_agent_message(defw_agent_blk_t *agent, int fd)
 	}
 
 	/* if the ips don't match ignore the message */
-	if (memcmp(&agent->addr.sin_addr, &hdr.ip, sizeof(hdr.ip))) {
+	hdr.ip.s_addr = ntohl(hdr.ip.s_addr);
+	if ((cmp = memcmp(&agent->addr.sin_addr, &hdr.ip, sizeof(hdr.ip)))) {
 		PERROR("IP addresses don't match");
-		return rc;
+		PERROR("agent IP = %s", inet_ntoa(agent->addr.sin_addr));
+		PERROR("hdr IP = %s", inet_ntoa(hdr.ip));
+		return EN_DEFW_RC_BAD_ADDR;
 	}
 
 	hdr.type = ntohl(hdr.type);
@@ -364,7 +368,7 @@ static int process_active_agents_helper(defw_agent_blk_t *agent, void *user_data
 			rc = process_agent_message(agent, hb_fd);
 			FD_CLR(hb_fd, tReadSet);
 			(*iNReady)--;
-			if (rc) {
+			if (rc && rc != EN_DEFW_RC_NO_DATA_ON_SOCKET) {
 				if (agent->node_type == EN_DEFW_RESMGR)
 					set_resmgr_connected(rc, NULL);
 				PERROR("CTRL msg failure: %s: %d", defw_rc2str(rc),
@@ -571,9 +575,13 @@ static void *defw_listener_main(void *usr_data)
 		select_to.tv_usec = 0;
 
 		FD_ZERO(&tReadSet);
+		pthread_mutex_lock(&global_var_mutex);
 		tReadSet = g_tAllSet;
+		pthread_mutex_unlock(&global_var_mutex);
 		iNReady = select(g_iMaxSelectFd + 1, &tReadSet, NULL, NULL,
 				 &select_to);
+
+		//PDEBUG("iNReady == %d, g_iMaxSelectFd %d\n", iNReady, g_iMaxSelectFd);
 
 		defw_release_dead_list_agents();
 
@@ -581,14 +589,14 @@ static void *defw_listener_main(void *usr_data)
 		 * registers with itself
 		 */
 		if (!resmgr_connected && strlen(get_parent_name()) != 0 &&
-		    !resmgr_connect_in_progress) {
+		    !resmgr_connect_in_progress && !resmgr_disabled()) {
 			char *resmgr_name = get_parent_name();
 			char *ip_addr = get_parent_address();
 			int port = get_parent_port();
 
 			PDEBUG("Attempting a connection on resmgr %s:%s:%d",
 			       resmgr_name, ip_addr, port);
-			rc = defw_connect_to_service(get_parent_address(), get_parent_port(),
+			rc = defw_connect_to_service(ip_addr, get_parent_port(),
 						    get_parent_name(), get_parent_hostname(),
 						    EN_DEFW_RESMGR, NULL, set_resmgr_connected);
 			if (rc == EN_DEFW_RC_IN_PROGRESS) {
@@ -659,7 +667,9 @@ static void *defw_listener_main(void *usr_data)
 
 					/*  Add new client to our select mask.  */
 					FD_SET(iConnFd, &g_tAllSet);
+					pthread_mutex_lock(&global_var_mutex);
 					g_iMaxSelectFd = defw_get_highest_fd();
+					pthread_mutex_unlock(&global_var_mutex);
 
 					/* Ok, it seems that the connected socket gains
 					 * the same flags as the listen socket.  We want

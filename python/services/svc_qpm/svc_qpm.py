@@ -1,9 +1,9 @@
 from defw_agent_info import *
-from defw_util import prformat, fg, bg
+from defw_util import prformat, fg, bg, expand_host_list
 from defw import me
 import logging, uuid, time, queue, threading, logging
-from defw_exception import DEFwError
-import sys, os
+from defw_exception import DEFwError, DEFwNotReady
+import sys, os, re, math
 
 sys.path.append(os.path.split(os.path.abspath(__file__))[0])
 import qpm_common as common
@@ -35,11 +35,45 @@ class QRCInstance:
 		self.instance = qrc
 
 class Circuit:
-	def __init__(self):
+	def __init__(self, cid, info):
 		self.__state = CircuitStates.UNDEF
-		self.__cid = None
-		self.qasm = None
+		self.__cid = cid
+		self.info = info
 		self.assigned_qrc = None
+		self.setup_circuit_run_details()
+
+	def round_to_nearest_power_of_two(self, number):
+		if number <= 0:
+			return 0  # or handle the case as needed
+
+		nearest_power_of_two = 2 ** int(math.log2(number) + 0.5)
+		return nearest_power_of_two
+
+	def setup_circuit_run_details(self):
+		# TODO: Make MPI configuration decisions based
+		# on the circuit meta data
+
+		try:
+			self.info['exec'] = os.environ['QFW_LAUNCHER_BIN']
+		except:
+			self.info['exec'] = 'mpirun'
+		module_use = os.environ['QFW_MODULE_USE_PATH']
+		self.info['modules'] = {'use': module_use,
+				'mods': ['openmpi', 'rocm', 'cray-python', 'tnqvm']}
+		self.info['provider'] = 'shm+cxi:linkx'
+		self.info['mapping'] = 'ppr:1:l3cache'
+		try:
+			self.info['qfw_circuit_runner_path'] = os.environ['QFW_CIRCUIT_RUNNER_PATH']
+		except:
+			self.info['qfw_circuit_runner_path'] = ''
+
+		# each 10 qubits requires 1 node added to the simulation
+		np = self.info['num_qubits'] / 10
+		if not np:
+			np = 1
+		else:
+			np = self.round_to_nearest_power_of_two(np)
+		self.info['np'] = np
 
 	def getState(self):
 		return self.__state
@@ -86,11 +120,16 @@ class QPM:
 		self.runner_queue = queue.Queue()
 		self.circuit_results = []
 		self.qrc_rr = 0
+		self.free_hosts = expand_host_list(os.environ['QFW_QPM_ASSIGNED_HOSTS'])
+		self.inuse_hosts = []
 
-	def create_circuit(self, qasm, nbits=1, endpoint=None):
+	def create_circuit(self, info):
+		if not common.g_qpm_initialized:
+			#raise DEFwNotReady("QPM has not initialized properly")
+			raise RuntimeError("QPM has not initialized properly")
+
 		cid = str(uuid.uuid4())
-		self.circuits[cid] = Circuit()
-		self.circuits[cid].qasm = qasm
+		self.circuits[cid] = Circuit(cid, info)
 		self.circuits[cid].set_ready()
 		return cid
 
@@ -103,33 +142,77 @@ class QPM:
 		else:
 			circ.set_deletion()
 
-	def sync_run(self, cid):
-		circuit = self.circuits[cid]
+	def consume_resources(self, circ):
+		info = circ.info
+		num_hosts = int(info['np'] / 8)
+		if not num_hosts:
+			num_hosts = 1
+
+		# determine if we have enough hosts to run this circuit
+		# If the number of hosts required is more than the total number
+		# of hosts then we can't run the circuit.
+		if num_hosts > len(self.free_hosts):
+			raise DEFwOutOfResources("Not enough nodes to run simulation")
+
+		circ.info['hosts'] = self.free_hosts[:num_hosts]
+		self.inuse_hosts += self.free_hosts[:num_hosts]
+		self.free_hosts = self.free_hosts[num_hosts:]
 		qrc = common.QRC_list[self.qrc_rr % len(common.QRC_list)]
 		qrc.load += 1
 		self.qrc_rr += 1
+		circ.assigned_qrc = qrc
 
-		logging.debug(f"Running {cid}\n{circuit.qasm}")
+	def free_resources(self, circ):
+		circ_hosts = circ.info['hosts']
+		for h in circ_hosts:
+			self.inuse_hosts.remove(h)
+			self.free_hosts.append(h)
+		if circ.assigned_qrc:
+			circ.assigned_qrc.load -= 1
+		circ.set_done()
 
-		return qrc.instance.sync_run(cid, circuit.qasm)
+	def common_run(self, cid):
+		self.read_all_qrc_cqs()
+		circuit = self.circuits[cid]
+		self.consume_resources(circuit)
+		logging.debug(f"Running {cid}\n{circuit.info}")
+		return circuit
+
+	def sync_run(self, cid):
+		if not common.g_qpm_initialized:
+			raise DEFwNotReady("QPM has not initialized properly")
+
+		circuit = self.common_run(cid)
+		try:
+			circuit.assigned_qrc.instance.sync_run(cid, circuit.info)
+		except Exception as e:
+			self.free_resources(circuit)
+			raise e
+		self.free_resources(circuit)
 
 	def async_run(self, cid):
-		circuit = self.circuits[cid]
-		qrc = common.QRC_list[self.qrc_rr % len(common.QRC_list)]
-		qrc.load += 1
-		circuit.assigned_qrc = qrc
-		circuit.set_running()
-		self.qrc_rr += 1
+		if not common.g_qpm_initialized:
+			raise DEFwNotReady("QPM has not initialized properly")
 
-		return qrc.instance.async_run(cid, circuit.qasm)
+		circuit = self.common_run(cid)
+
+		try:
+			circuit.assigned_qrc.instance.async_run(cid, circuit.info)
+		except Exception as e:
+			self.free_resources(circuit)
+			raise e
 
 	def read_all_qrc_cqs(self):
 		for qrc in common.QRC_list:
 			while (res := qrc.instance.read_cq()):
 				qrc.circuit_results.append(res)
-				self.circuit[res['cid']].set_done()
+				circ = self.circuit[res['cid']]
+				self.free_resources(circ)
 
 	def read_cq(self, cid=None):
+		if not common.g_qpm_initialized:
+			raise DEFwNotReady("QPM has not initialized properly")
+
 		self.read_all_qrc_cqs()
 		if cid:
 			if cid not in self.circuits:
@@ -150,6 +233,9 @@ class QPM:
 		return None
 
 	def peek_cq(self, cid=None):
+		if not common.g_qpm_initialized:
+			raise DEFwNotReady("QPM has not initialized properly")
+
 		self.read_all_qrc_cqs()
 		if cid:
 			if cid not in self.circuits:
@@ -167,16 +253,22 @@ class QPM:
 					return qrc.circuit_results[0]
 		return None
 
-	def status(self):
+	def status(self, cid):
+		if not common.g_qpm_initialized:
+			raise DEFwNotReady("QPM has not initialized properly")
+
 		self.read_all_qrc_cqs()
 		r = {}
 		for cid, circ in self.circuits.items():
 			r[cid] = circ.status()
 		return r
 
+	def is_ready(self):
+		return common.g_qpm_initialized
+
 	def query(self):
 		from . import svc_info
-		cap = Capability("QPM", "Quantum Platform Manager", 1)
+		cap = Capability(svc_info['name'], svc_info['description'], 1)
 		svc = ServiceDescr(svc_info['name'], svc_info['description'], [cap], 1)
 		info = DEFwAgentInfo(self.__class__.__name__,
 						  self.__class__.__module__, [svc])

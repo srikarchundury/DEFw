@@ -7,6 +7,7 @@ from cdefw_agent import defw_send_req, defw_send_rsp, defw_connect_to_service, \
 from defw import client_agents, service_agents, \
 				active_client_agents, active_service_agents, \
 				me, preferences, service_apis
+from defw_util import print_thread_stack_trace_to_logger
 import defw
 
 class WorkerEvent:
@@ -27,6 +28,9 @@ class WorkerEvent:
 			self.msg_yaml = None
 			if msg:
 				self.msg_yaml = yaml.load(msg, Loader=yaml.Loader)
+		logging.debug("workerEvent generated from: ")
+		stack_trace_str = "".join(traceback.format_stack())
+		logging.debug(f"{stack_trace_str}")
 
 	def __check_type(self, we_type):
 		if we_type != WorkerEvent.EVENT_INCOMING_REQUEST and \
@@ -36,6 +40,21 @@ class WorkerEvent:
 		   we_type != WorkerEvent.EVENT_REFRESH_COMPLETE and \
 		   we_type != WorkerEvent.EVENT_SHUTDOWN:
 			   raise DEFwError(f"Bad WorkerEvent type {we_type}")
+
+	def type2str(self, we):
+		if WorkerEvent.EVENT_INCOMING_REQUEST:
+			return 'EVENT_INCOMING_REQUEST'
+		if WorkerEvent.EVENT_INCOMING_RESPONSE:
+			return 'EVENT_INCOMING_RESPONSE'
+		if WorkerEvent.EVENT_CONN_COMPLETE:
+			return 'EVENT_CONN_COMPLETE'
+		if WorkerEvent.EVENT_REFRESH:
+			return 'EVENT_REFRESH'
+		if WorkerEvent.EVENT_REFRESH_COMPLETE:
+			return 'EVENT_REFRESH_COMPLETE'
+		if WorkerEvent.EVENT_SHUTDOWN:
+			return 'EVENT_SHUTDOWN'
+		return "UNKNOWN_WORKEREVENT"
 
 class WorkerRequest:
 	WR_SEND_MSG = 1
@@ -68,18 +87,28 @@ class WorkerRequest:
 			self.queue = queue.Queue()
 		else:
 			self.queue = None
-
-		logging.debug(f"WorkRequest({self.wr_type}, {self.blocking}, {self.req_uuid})")
+		logging.debug(f"WorkRequest({self.type2str(self.wr_type)}, " \
+					  f"{self.blocking}, {self.req_uuid})")
+		stack_trace_str = "".join(traceback.format_stack())
+		logging.debug(f"{stack_trace_str}")
 
 	def __check_type(self, wr_type):
 		if wr_type != WorkerRequest.WR_SEND_MSG and \
 		   wr_type != WorkerRequest.WR_CONNECT:
 			   raise DEFwError(f"Bad Request type {wr_type}")
 
+	def type2str(self, wr_type):
+		if WorkerRequest.WR_SEND_MSG:
+			return 'WR_SEND_SMG'
+		if WorkerRequest.WR_CONNECT:
+			return 'WR_CONNECT'
+		return 'UNKNOWN_WORKREQUEST'
+
 	def wait(self):
 		if not self.queue:
 			return None
-		logging.debug(f"Waiting for WorkRequest({self.wr_type}) {self.req_uuid} to complete")
+		logging.debug(f"Waiting for WorkRequest({self.type2str(self.wr_type)}) " \
+					  f"{self.req_uuid} to complete")
 
 		t = time.time()
 		while t < self.deadline:
@@ -93,7 +122,8 @@ class WorkerRequest:
 			t = time.time()
 			logging.debug(f"cur time {str(t)}, deadline {str(self.deadline)}")
 			if event:
-				logging.debug(f"Completed {self.wr_type} ev: {event.ev_type} " \
+				logging.debug(f"Completed {self.type2str(self.wr_type)} " \
+							  f"ev: {event.type2str(event.ev_type)} " \
 							  f"WorkRequest {self.req_uuid} exp {self.expected_events}")
 				if event.ev_type == WorkerEvent.EVENT_CONN_COMPLETE:
 					with self.expected_events_lock:
@@ -106,7 +136,8 @@ class WorkerRequest:
 						else:
 							raise DEFwCommError("Expected to wait for a REFRESH COMPLETE")
 					else:
-						raise DEFwCommError(f"expected REFRESH_COMPLETE got {event.ev_type}")
+						raise DEFwCommError(f"expected REFRESH_COMPLETE got " \
+								f"event.type2str({event.ev_type})")
 				elif event.ev_type == WorkerEvent.EVENT_REFRESH_COMPLETE:
 					with self.expected_events_lock:
 						if len(self.expected_events) > 0:
@@ -185,7 +216,7 @@ class WorkerThread:
 			except queue.Empty:
 				continue
 
-			logging.debug(f"Received event {we.ev_type}")
+			logging.debug(f"Received event {we.type2str(we.ev_type)}")
 
 			if we.ev_type == WorkerEvent.EVENT_INCOMING_REQUEST:
 				logging.debug(f"handling request {we.msg_yaml}")
@@ -249,7 +280,7 @@ class WorkerThread:
 		method_name = ''
 		rc = {}
 
-		logging.critical("Calling handle_rpc_type")
+		logging.debug("Calling handle_rpc_type")
 
 		# check to see if this is for me
 		target = y['rpc']['dst']
@@ -288,8 +319,8 @@ class WorkerThread:
 
 		# any remote invocation implies that module which needs to be
 		# imported is in the python/icpa-be/
-		logging.critical("module name is: %s " % mname)
-		logging.critical("rpc type is: %s " % rpc_type)
+		logging.debug("module name is: %s " % mname)
+		logging.debug("rpc type is: %s " % rpc_type)
 		module = importlib.import_module(mname)
 		importlib.reload(module)
 		logging.debug(f"module is: {module.__name__}")
@@ -328,7 +359,13 @@ class WorkerThread:
 				logging.debug(f'remote call to method call {class_name}.{method_name}')
 				rc = getattr(instance, method_name)(*args, **kwargs)
 		except Exception as e:
-			if type(e) == DEFwError:
+			# NOTE: I can just send the exception as is to the other end, however,
+			# it won't have a backtrace. I put the back trace in the DEFwError representation
+			# but other exceptions will not have a backtrace from the remote end.
+			# TODO: Maybe we can toggle this behavior through some config. I can see that it
+			# might be cleaner to just print the message from the remote side instead of the
+			# back trace
+			if issubclass(type(e), DEFwError):
 				defw_exception_string = e
 			else:
 				exception_list = traceback.format_stack()

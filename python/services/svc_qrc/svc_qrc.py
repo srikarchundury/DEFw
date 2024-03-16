@@ -1,8 +1,10 @@
 from defw_agent_info import *
 from defw_util import prformat, fg, bg
 from defw import me
-import logging, uuid, time, queue, threading, logging
-from defw_exception import DEFwError
+import logging, uuid, time, queue, threading, logging, sys, os, io, contextlib
+import importlib
+from defw_exception import DEFwError, DEFwExists, DEFwExecutionError
+import svc_launcher, cdefw_global
 
 CID_COUNTER = 0
 QCR_VERBOSE = 1
@@ -12,26 +14,13 @@ class CircuitStates:
 	READY = 1
 	RUNNING = 2
 	DONE = 3
+	FAIL = 4
 
 class Circuit:
-	__state = 0    # Circuit state (enum of valid states)
-	__spec = None  # Circuit specification (qasm string)
-	__cid = -1     # Circuit id (uniq id)
-	qasm = None
-	qpu = None
-	qubitReg = None
-	compiler = None
-	compiled_circuit = None
-	nbits = -1
-
-	def __init__(self):
+	def __init__(self, cid, info):
 		self.__state = CircuitStates.UNDEF
-		self.__spec  = None
-		self.qpu = None
-		self.qubitReg = None
-		self.compiler = None
-		self.compiled_circuit = None
-		self.nbits = 0
+		self.info = info
+		self.cid = cid
 
 	def getState(self):
 		return self.__state
@@ -52,15 +41,8 @@ class Circuit:
 	def set_done(self):
 		return self.setState(CircuitStates.DONE)
 
-	def getCirSpec(self):
-		return self.__circuit_spec
-
-	def setCirSpec(self, spec):
-		self.__circuit_spec = spec
-		self.setReady()
-		self.__cid = CID_COUNTER
-		CID_COUNTER += 1
-		return True
+	def set_fail(self):
+		return self.setState(CircuitStates.FAIL)
 
 	def status(self):
 		if self.__state == CircuitStates.READY:
@@ -69,25 +51,41 @@ class Circuit:
 			return 'RUNNING'
 		if self.__state == CircuitStates.DONE:
 			return 'DONE'
+		if self.__state == CircuitStates.FAIL:
+			return 'FAIL'
 
 		return 'BUG'
+
+@contextlib.contextmanager
+def suppress_prints():
+	# Save the original stdout
+	original_stdout = sys.stdout
+	original_stderr = sys.stderr
+	sys.stdout = io.StringIO()
+	sys.stderr = io.StringIO()
+
+	yield
+
+	sys.stdout = original_stdout
+	sys.stderr = original_stderr
 
 class QRC:
 	def __init__(self, start=True):
 		self.circuits = {}
 		self.runner_queue = queue.Queue()
 		self.circuit_results = []
+		self.runner_shutdown = False
+		self.module_util = None
 		if start:
 			self.runner = threading.Thread(target=self.runner, args=())
 			self.runner.start()
-		self.runner_shutdown = False
 
 	def __del__(self):
 		self.runner_shutdown = True
 		self.runner_queue.put(-1)
 
 	def runner(self):
-		logging.debug("starting QRC main loop")
+		logging.debug(f"starting QRC main loop: {sys.path}")
 		while not self.runner_shutdown:
 			try:
 				cid = self.runner_queue.get(timeout=1)
@@ -96,8 +94,15 @@ class QRC:
 					continue
 			except queue.Empty:
 				continue
-			result = self.run_circuit(cid)
-			r = {'cid': cid, 'result': result}
+			exception = None
+			try:
+				rc, result = self.run_circuit(cid)
+			except Exception as e:
+				exception = e
+				pass
+			if exception:
+				rc = e
+			r = {'cid': cid, 'result': result, 'rc': rc}
 			self.circuit_results.append(r)
 
 	def read_cq(self, cid=None):
@@ -114,9 +119,105 @@ class QRC:
 				return r
 		return None
 
+	def create_circuit(self, cid, info):
+		if cid not in self.circuits.keys():
+			self.circuits[cid] = Circuit(cid, info)
+		else:
+			raise DEFwExists(f"{cid} already exists")
+
+	def import_module_util(self):
+		try:
+			mod_path = os.path.join(os.environ['MODULESHOME'], "init",
+					"env_modules_python.py")
+			mod_name = "env_modules_python"
+			spec = importlib.util.spec_from_file_location(mod_name,
+					mod_path)
+			self.module_util = importlib.util.module_from_spec(spec)
+			spec.loader.exec_module(self.module_util)
+		except:
+			raise DEFwError("module utility not available on this system")
+
+	def load_modules(self, modules):
+		if not self.module_util:
+			self.import_module_util()
+
+		module_use = modules['use'].split(':')
+		for use in module_use:
+			self.module_util.module("use", use)
+		for mod in modules['mods']:
+			self.module_util.module("load", mod)
+
+		with suppress_prints():
+			mod_list = self.module_util.module("list")
+		logging.debug(f"Module loaded\n{mod_list[1]}")
+
+	def form_cmd(self, circ, qasm_file):
+		info = circ.info
+
+		# TODO: we need to provide a DVM URI
+		#
+		if 'compiler' not in info:
+			compiler = 'staq'
+		else:
+			compiler = info['compiler']
+
+		circuit_runner = os.path.join(info['qfw_circuit_runner_path'], 'circuit_runner')
+
+		cmd = f'{info["exec"]} --dvm search -x LD_LIBRARY_PATH --mca btl ^tcp,ofi,vader,openib ' \
+			  f'--mca pml ^ucx --mca mtl ofi --mca opal_common_ofi_provider_include '\
+			  f'{info["provider"]} --map-by {info["mapping"]} --bind-to core '\
+			  f'--np {info["np"]} --host {",".join(info["hosts"])} {circuit_runner} -q {qasm_file} '\
+			  f'-b {info["num_qubits"]} -s {info["num_shots"]} -c {compiler}'
+
+		return cmd
+
+	def run_circuit(self, cid):
+		circ = self.circuits[cid]
+
+		self.load_modules(circ.info["modules"])
+
+		tmp_dir = cdefw_global.get_defw_tmp_dir()
+
+		qasm_c = circ.info["qasm"]
+		logging.debug(f"Running Circuit\n{qasm_c}")
+		qasm_file = os.path.join(tmp_dir, str(cid)+".qasm")
+		with open(qasm_file, 'w') as f:
+			f.write(qasm_c)
+
+		cmd = self.form_cmd(circ, qasm_file)
+		logging.debug(f"Running {cmd}")
+
+		circ.set_running()
+		launcher = svc_launcher.Launcher()
+		try:
+			output, error, rc = launcher.launch(cmd, wait=True)
+		except Exception as e:
+			os.remove(qasm_file)
+			logging.critical(f"Failed to launch {cmd}")
+			raise e
+
+		os.remove(qasm_file)
+
+		if not rc:
+			circ.set_done()
+			return 0, output
+		circ.set_fail()
+		error_str = f"Circuit failed with {rc}:{output}:{error}"
+		logging.debug(error_str)
+		raise DEFwExecutionError(error_str)
+
+	def sync_run(self, cid, info):
+		self.create_circuit(cid, info)
+		return self.run_circuit(cid)
+
+	def async_run(self, cid, info):
+		self.create_circuit(cid, info)
+		self.runner_queue.put(cid)
+		return cid
+
 	def query(self):
 		from . import svc_info
-		cap = Capability("QuantumSim", "Quantum HPC Simulator", 1)
+		cap = Capability(svc_info['name'], svc_info['description'], 1)
 		svc = ServiceDescr(svc_info['name'], svc_info['description'], [cap], 1)
 		info = DEFwAgentInfo(self.__class__.__name__,
 						  self.__class__.__module__, [svc])
@@ -128,90 +229,5 @@ class QRC:
 	def release(self, services):
 		self.runner_shutdown = True
 
-	def __find_circuit(self, cid):
-		if cid in self.circuits:
-			return self.circuits[cid]
-		return None
-
-	def create_circuit(self, cid, qasm, nbits=1, endpoint=None):
-		import xacc
-		self.circuits[cid] = Circuit()
-		self.circuits[cid].qasm = qasm
-		circuit = self.circuits[cid]
-
-		logging.debug(f"Start circuit compile at: {time.monotonic_ns()}")
-		# TODO: Need to pass in shots
-		circuit.qpu = xacc.getAccelerator("tnqvm:exatn-mps", {"shots":1})
-		compiler = xacc.getCompiler('staq')
-		circuit.compiled_circuit = compiler.compile(circuit.qasm,
-													circuit.qpu)
-		circuit.nbits = nbits
-		logging.debug(f"Finished circuit compile at: {time.monotonic_ns()}")
-		circuit.set_ready()
-
-		return cid
-
-	def delete_circuit(self, cid):
-		try:
-			del self.circuits[cid]
-		except:
-			pass
-
-	def run_circuit(self, cid):
-		"""
-		 Input: None
-		 Return: return: Event object
-		 Description: Run a circuit synchronously. Return the event object.
-		"""
-		# sanity check
-		import xacc
-		circuit = self.__find_circuit(cid)
-		if not circuit:
-			raise DEFwError(f"Got circuit {cid} does not exist in database")
-
-		circuit.set_running()
-
-		if QCR_VERBOSE:
-			logging.debug(f"  DBG: qalloc {circuit.nbits} nbits")
-		qubitReg = xacc.qalloc(circuit.nbits)
-
-		if QCR_VERBOSE:
-			logging.debug(f"  DBG: compiled circuit {circuit.compiled_circuit} here")
-		c = circuit.compiled_circuit
-
-		if QCR_VERBOSE:
-			logging.debug(f"  DBG: execute circuit now")
-		logging.debug(f"Start circuit execution at: {time.monotonic_ns()}")
-		circuit.qpu.executeWithoutGIL(qubitReg, c.getComposites()[0])
-		logging.debug(f"Finish circuit execution at: {time.monotonic_ns()}")
-
-		if QCR_VERBOSE:
-			logging.debug(qubitReg)
-
-		r1 = qubitReg.getInformation()
-		r2 = qubitReg.getMeasurements()
-
-		if QCR_VERBOSE:
-			logging.debug("DBG: ==information==")
-			logging.debug(r1)
-
-			logging.debug("DBG: ==measurements==")
-			logging.debug(r2)
-
-		results = { "Info": r1, "Measurements": r2}
-
-		circuit.set_done()
-
-		return results
-
-	def sync_run(self, cid, qasm):
-		logging.debug(f"Running {cid}\n{qasm}")
-		self.create_circuit(cid, qasm)
-		return self.run_circuit(cid)
-
-	def async_run(self, cid, qasm):
-		self.create_circuit(cid, qasm)
-		return self.runner_queue.put(cid)
-
 	def test(self):
-		logging.debug("Testing the QRC")
+		return "****Testing the QRC****"

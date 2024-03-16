@@ -140,6 +140,37 @@ defw_rc_t python_run_interactive_shell(void)
 	return EN_DEFW_RC_OK;
 }
 
+#define TEL_SRV_LOG "defw_telsrv.out"
+
+defw_rc_t python_run_telnet_server(void)
+{
+	char buf[MAX_STR_LEN * 4];
+	/* run the telnet server. This becomes our main process
+	 * now
+	 */
+	PDEBUG("Running in Daemon mode");
+	sprintf(buf, "fname = os.path.join('%s', '%s')\n",
+		g_defw_cfg.tmp_dir ? : "/tmp", TEL_SRV_LOG);
+	RUN_PYTHON_CMD(buf);
+
+	sprintf(buf, "logfile = open(fname, 'w')\n");
+	RUN_PYTHON_CMD(buf);
+
+	RUN_PYTHON_CMD("sys.stdout = sys.stderr = logfile\n");
+
+	RUN_PYTHON_CMD("from defw_telnet_sr import DefwTelnetServer\n");
+
+	sprintf(buf, "tns = DefwTelnetServer(%d)\n",
+		g_defw_cfg.l_info.hb_info.agent_telnet_port);
+	RUN_PYTHON_CMD(buf);
+
+	RUN_PYTHON_CMD("tns.run()\n");
+
+	RUN_PYTHON_CMD("logfile.close()");
+
+	return EN_DEFW_RC_OK;
+}
+
 defw_rc_t python_run_cmd_line(int argc, char *argv[], char *module, char *cmd)
 {
 	char buf[MAX_STR_LEN * 4];
@@ -176,7 +207,7 @@ defw_rc_t python_run_cmd_line(int argc, char *argv[], char *module, char *cmd)
 	PySys_SetObject("executable", PyUnicode_DecodeFSDefault(buf));
 	PySys_SetObject("_base_executable", PyUnicode_DecodeFSDefault(buf));
 
-	RUN_PYTHON_CMD("sys.argv.pop(0); print(sys.argv)\n");
+	RUN_PYTHON_CMD("sys.argv.pop(0)\n");
 
 	if (module) {
 		sprintf(buf,
@@ -220,6 +251,8 @@ defw_rc_t python_init(void)
 
 	Py_Initialize();
 
+	PyEval_InitThreads();
+
 	return python_setup();
 }
 
@@ -228,7 +261,7 @@ defw_rc_t python_finalize()
 	PDEBUG("Python finalizing");
 
 	if (g_defw_cfg.shell == EN_DEFW_RUN_CMD_LINE)
-		RUN_PYTHON_CMD("me.exit()")
+		RUN_PYTHON_CMD("me.exit()");
 	Py_Finalize();
 
 	PDEBUG("Python finalized");

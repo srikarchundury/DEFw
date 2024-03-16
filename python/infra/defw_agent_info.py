@@ -1,5 +1,6 @@
 from defw_exception import DEFwOutOfResources
 from defw import me
+import logging
 
 # This is what an agent (either a service or a client) needs to return
 # when queried about the services it offers:
@@ -88,6 +89,7 @@ class DEFwAgentInfo:
 
 		viable_services = []
 		for s in self.__owned_services:
+			logging.debug(f"get_services({s}, {Sfilter})")
 			if s.get_service(Sfilter):
 				viable_services.append(s)
 

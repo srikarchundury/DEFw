@@ -240,6 +240,7 @@ class DEFwAgents:
 					if agent.name not in self.agent_dict:
 						self.max += 1
 					self.agent_dict[ep.get_id()] = Agent(ep)
+					logging.debug(f"Found Agent:\n{ep}")
 					defw_release_agent_blk_unlocked(agent, False)
 		except:
 			pass

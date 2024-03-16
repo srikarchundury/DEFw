@@ -40,6 +40,12 @@ defw_rc_t python_exec(char *code);
 defw_rc_t python_run_interactive_shell(void);
 
 /*
+ * python_run_telnet_server
+ *	Run the telnet server as our main loop
+ */
+defw_rc_t python_run_telnet_server(void);
+
+/*
  * python_collect_agent_core
  *   Collect core information from the specified agent
  */

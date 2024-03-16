@@ -229,7 +229,7 @@ defw_rc_t populateMsgHdr(int rsocket, char *msg_hdr,
 
 	hdr->type = htonl(msg_type);
 	hdr->len = htonl(msg_size);
-	hdr->ip.s_addr = sock.sin_addr.s_addr;
+	hdr->ip.s_addr = htonl(sock.sin_addr.s_addr);
 	hdr->version = htonl(defw_version_number);
 
 	return EN_DEFW_RC_OK;
@@ -254,8 +254,9 @@ defw_rc_t readTcpMessage(int iFd, char *pcBuffer,
 		rc = ioctl(iFd, FIONREAD, &tNleft);
 		if (rc < 0)
 			return EN_DEFW_RC_CLIENT_CLOSED;
-		else if (tNleft == 0)
-			return EN_DEFW_RC_NO_DATA_ON_SOCKET;
+		// TODO: Not sure if the below is needed
+		//else if (tNleft == 0)
+		//	return EN_DEFW_RC_NO_DATA_ON_SOCKET;
 	}
 
 	/* set the timeout */

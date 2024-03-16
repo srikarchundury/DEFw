@@ -61,6 +61,22 @@ class DEFwError(Exception):
 	def get_arg(self):
 		return self.arg
 
+class DEFwInProgress(DEFwError):
+	def __init__(self, msg='', arg=None, halt=False, nname=None):
+		super().__init__(msg, arg, halt, nname)
+
+class DEFwExists(DEFwError):
+	def __init__(self, msg='', arg=None, halt=False, nname=cdefw_global.get_node_name()):
+		super().__init__(msg, arg, halt, nname)
+
+class DEFwNotReady(DEFwError):
+	def __init__(self, msg='', arg=None, halt=False, nname=None):
+		super().__init__(msg, arg, halt, nname)
+
+class DEFwExecutionError(DEFwError):
+	def __init__(self, msg='', arg=None, halt=False, nname=None):
+		super().__init__(msg, arg, halt, nname)
+
 class DEFwCommError(DEFwError):
 	def __init__(self, msg='', arg=None, halt=False, nname=None):
 		super().__init__(msg, arg, halt, nname)

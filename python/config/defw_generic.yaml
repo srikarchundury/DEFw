@@ -1,9 +1,11 @@
 defw:
     parent-address: ${DEFW_PARENT_ADDR}
     parent-port: ${DEFW_PARENT_PORT}
+    parent-hostname: ${DEFW_PARENT_HOSTNAME}
     parent-name: ${DEFW_PARENT_NAME}
     name: ${DEFW_AGENT_NAME}
     listen-port: ${DEFW_LISTEN_PORT}
+    telnet-port: ${DEFW_TELNET_PORT}
     shell: ${DEFW_SHELL_TYPE}
     type: ${DEFW_AGENT_TYPE}
     path: ${DEFW_PATH}

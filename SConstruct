@@ -1,4 +1,4 @@
-import os, glob, sysconfig
+import os, glob, sysconfig, sys
 import distutils.sysconfig
 
 DEFW_PATH = Dir('.').abspath
@@ -77,7 +77,7 @@ def build_bin(env, daemon):
 
     cmd = env['CC'] + " " + env['SWIG_COMP_FLAGS'] + \
             " -I" + env['PYTHON_INCLUDE_DIR'] + " " + \
-            binary + " -L" + env['LINK_PATH'] + \
+            binary + " -L" + env['LINK_PATH'] + " -L" + env['PYTHON_LIB_DIR'] + \
             " -lfwsl -ldefw_global -ldefw_connect -ldefw_agent -luuid -l" + env['PYTHON_LIB'] + \
             " -o " + path
     print(cmd)
@@ -91,6 +91,8 @@ def clean(env):
     cmd = "rm -Rf " + " ".join([pfiles, wfiles, ofiles, ifiles])
     print(cmd)
     os.system(cmd)
+
+print(sys.version)
 
 env['PYTHON'] = "python3"
 env['SWIG'] = "swig"

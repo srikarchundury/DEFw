@@ -1,4 +1,5 @@
 from defw_exception import DEFwCommError, DEFwAgentNotFound
+from defw_util import expand_host_list
 from .svc_qpm import QPM, QRCInstance
 import cdefw_global
 import defw
@@ -25,35 +26,6 @@ service_classes = [QPM]
 
 g_launchers = {}
 g_shutdown = False
-
-def expand_host_list(expr):
-	host_list = []
-
-	open_br = expr.find('[')
-	close_br = expr.find(']', open_br)
-	if open_br == -1 and close_br == -1:
-		return [expr]
-
-	if open_br == -1 or close_br == -1:
-		return []
-
-	rangestr = expr[open_br+1 : close_br]
-
-	node = expr[:open_br]
-
-	ranges = rangestr.split(',')
-
-	for r in ranges:
-		cur = r.split('-')
-		if len(cur) == 2:
-			pre = "{:0%dd}" % len(cur[0])
-			for idx in range(int(cur[0]), int(cur[1])+1):
-				host_list.append(f'{node}{pre.format(idx)}')
-		elif len(cur) == 1:
-			pre = "{:0%dd}" % len(cur[0])
-			host_list.append(f'{node}{pre.format(int(cur[0]))}')
-
-	return host_list
 
 def connect_to_launcher(res):
 	# . Add each QRC endpoint on the QPM list
@@ -97,25 +69,32 @@ def wait_for_all_qrcs():
 		sleep(1)
 	if not started:
 		uninitialize()
-		raise DEFwAgentNotFound(f"{qrc_name} did not start")
+		raise DEFwAgentNotFound(f"QRCs did not start")
 	logging.debug("All QRCs connected")
 
 def spawn_qrc(launcher_api, port):
 	my_ep = defw.me.my_endpoint()
-	qrc_name = 'DEFwLauncher'+str(port)
+	qrc_name = 'DEFwQRC'+str(port)
 
 	env =  {'DEFW_AGENT_NAME': qrc_name,
 			'DEFW_LISTEN_PORT': str(port),
+			'DEFW_TELNET_PORT': str(port+1),
 			'DEFW_ONLY_LOAD_MODULE': 'svc_qrc',
+			'DEFW_LOAD_NO_INIT': 'svc_launcher',
 			'DEFW_SHELL_TYPE': 'daemon',
 			'DEFW_AGENT_TYPE': 'service',
 			'DEFW_PARENT_ADDR': my_ep.addr,
 			'DEFW_PARENT_PORT': str(my_ep.port),
 			'DEFW_PARENT_NAME': my_ep.name,
+			'DEFW_DISABLE_RESMGR': "no",
 			'DEFW_LOG_DIR': os.path.join(os.path.split(cdefw_global.get_defw_tmp_dir())[0], qrc_name),
-			'DEFW_PARENT_HNAME': my_ep.hostname}
+			'DEFW_PARENT_HOSTNAME': my_ep.hostname}
 
-	bin_path = os.environ['QFW_QRC_BIN_PATH']
+	# defwp can be in PATH
+	try:
+		bin_path = os.environ['QFW_QRC_BIN_PATH']
+	except:
+		bin_path = "defwp"
 	pid = launcher_api.launch(bin_path, env=env)
 	logging.debug(f"Launched {qrc_name} with {pid}")
 	qrc_inst = QRCInstance(pid, qrc_name)
@@ -143,16 +122,20 @@ def start_qrcs(num_qrc, host_list):
 	found_launchers = []
 	logging.debug(f"Here are the available launchers: {res}")
 	while len(res) >= 0:
+		wait += 1
 		if wait >= g_timeout:
 			break
 		res = defw.resmgr.get_services('Launcher')
+		logging.debug(f"Launcher resources return {res}")
+		if not res:
+			sleep(5)
+			continue
 		for k, r in res.items():
 			if r['residence'].hostname in host_list and \
 			   r['residence'].hostname not in found_hosts:
 				found_hosts.append(r['residence'].hostname)
 				found_launchers.append({k:r})
 		if len(found_hosts) != len_host_list:
-			wait += 1
 			logging.debug("Waiting to connect to launcher")
 			sleep(1)
 		else:
@@ -248,5 +231,8 @@ def uninitialize():
 	g_shutdown = True
 	for launcher, qrcs in g_launchers.items():
 		for qrc in qrcs:
-			launcher.kill(qrc.pid)
+			try:
+				launcher.kill(qrc.pid)
+			except:
+				pass
 	# TODO: Disconnect from launchers

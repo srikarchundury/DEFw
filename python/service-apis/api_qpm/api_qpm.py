@@ -4,7 +4,7 @@ class QPM(BaseRemote):
 	def __init__(self, ep):
 		super().__init__(target=ep)
 
-	def create_circuit(self, qasm, nbits=1):
+	def create_circuit(self, info):
 		pass
 
 	def delete_circuit(self, cid):
@@ -16,7 +16,10 @@ class QPM(BaseRemote):
 	def async_run(self, cid):
 		pass
 
-	def status(self):
+	def status(self, cid):
+		pass
+
+	def is_ready(self):
 		pass
 
 	def read_cq(self, cid=None):

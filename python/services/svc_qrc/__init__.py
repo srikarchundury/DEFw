@@ -1,4 +1,5 @@
 from defw_util import prformat, fg, bg
+from defw_exception import DEFwError
 from .svc_qrc import *
 import sys
 
@@ -18,9 +19,8 @@ svc_info = {'name': 'QRC',
 service_classes = [QRC]
 
 def initialize():
-	# Initialize the service. EX: start threads/processes, etc
-	sys.path.append('/home/a2e/ORNL/Quantum/install/qCuda_July3_2023/xacc')
-	prformat(fg.green+fg.bold, "registering the Quantum HPC")
+	prformat(fg.green+fg.bold, "registering the Quantum Runtime Controller")
 
 def uninitialize():
-	prformat(fg.green+fg.bold, "unregistering the Quantum HPC")
+	# TODO: we need a way to kill all living processes on uninitialization
+	prformat(fg.green+fg.bold, "unregistering the Quantum Runtime Controller")

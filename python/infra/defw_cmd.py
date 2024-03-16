@@ -49,3 +49,34 @@ def defw_exec_local_cmd(cmd, expire=0, exception=True):
 	if not cmd_thrd.rc:
 		raise StopIteration(cmd+"\nExpired")
 	return cmd_thrd.rc
+
+def read_from_stream(stream):
+	return '\n'.join(stream.read().decode('utf-8').splitlines())
+
+def defw_exec_remote_cmd(cmd, host, username='', ignore_err=False, deamonize=False):
+	import getpass
+	import paramiko
+
+	if deamonize:
+		cmd += " &"
+
+	if len(username) == 0:
+		username = getpass.getuser()
+
+	ssh = paramiko.SSHClient()
+	ssh.load_system_host_keys()
+	ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+	ssh.connect(hostname=host, timeout=3, banner_timeout=3, username=username)
+	stdin, stdout, stderr = ssh.exec_command(cmd)
+
+	logging.debug(f"Run:\n\t{cmd}\non\n\t{host}")
+
+	out = ''
+	err = ''
+	if stdout.channel.recv_ready():
+		out = read_from_stream(stdout)
+	if stdout.channel.recv_ready():
+		err = read_from_stream(stderr)
+	ssh.close()
+	return out, err
+

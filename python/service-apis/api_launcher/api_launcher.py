@@ -14,6 +14,9 @@ class Launcher(BaseRemote):
 	def terminate(self, pid):
 		pass
 
+	def status(self, pid):
+		pass
+
 	def shutdown(self):
 		pass
 

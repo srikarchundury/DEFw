@@ -14,6 +14,16 @@
 
 defw_config_params_t g_defw_cfg;
 
+void disable_resmgr(void)
+{
+	g_defw_cfg.disable_resgmr_connect = true;
+}
+
+int resmgr_disabled(void)
+{
+	return g_defw_cfg.disable_resgmr_connect;
+}
+
 void set_log_level(defw_log_level_t level)
 {
 	g_defw_cfg.loglevel = level;

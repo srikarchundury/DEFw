@@ -9,15 +9,16 @@ import cdefw_global
 from defw_agent import DEFwClientAgents, DEFwServiceAgents, \
 	 DEFwActiveClientAgents, DEFwActiveServiceAgents, Endpoint
 import netifaces
-import os, subprocess, sys, yaml, fnmatch, logging, csv, uuid
+import os, subprocess, sys, yaml, fnmatch, logging, csv, uuid, io
 import shutil, traceback, datetime, re, copy, threading, queue, time
 from defw_util import prformat, fg, bg, generate_random_string, \
-	 get_lscpu, get_today, get_now
+	 get_lscpu, get_today, get_now, print_all_thread_stack_traces_to_logger
 
 preferences = {}
 defw_tmp_dir = ''
 defw_path = ''
 only_load = []
+noinit_load = []
 g_yaml_blocks = []
 client_agents = None
 service_agents = None
@@ -804,9 +805,12 @@ class ServiceSuitesBase(Suites):
 			#import the directory as a package
 			if d.startswith(self.suite_prefix):
 				name = d.replace(self.suite_prefix, '')
+				mod_path = import_path+"."+d
+				if noinit_load and d in noinit_load:
+					sys.path.append(mod_path)
+					continue
 				if only_load and d not in only_load and name != 'resmgr':
 					continue
-				mod_path = import_path+"."+d
 				# TODO for now disable loading the resmgr if you're not
 				# the resmgr. is there a better way of handling this?
 				if not me.is_resmgr() and name == 'resmgr' and self.noload_resmgr:
@@ -918,8 +922,7 @@ class Myself:
 		put_shutdown()
 		updater_thread.join()
 		print("Shutting down the DEFw")
-		for thread in threading.enumerate():
-			logging.critical(f"- {thread.name} (ID: {thread.ident})")
+		print_all_thread_stack_traces_to_logger()
 		exit()
 
 	def get_cpuinfo(self):
@@ -1112,11 +1115,21 @@ def resolve_environment_vars(config):
 def configure_defw():
 	global defw_path
 	global only_load
+	global noinit_load
+
+	if 'DEFW_DISABLE_RESMGR' in os.environ and \
+		os.environ['DEFW_DISABLE_RESMGR'].upper() == 'YES':
+			cdefw_global.disable_resmgr()
 
 	if 'DEFW_ONLY_LOAD_MODULE' in os.environ:
 		only_load = os.environ['DEFW_ONLY_LOAD_MODULE'].split(',')
 	else:
 		only_load = []
+
+	if 'DEFW_LOAD_NO_INIT' in os.environ:
+		noinit_load = os.environ['DEFW_LOAD_NO_INIT'].split(',')
+	else:
+		noinit_load = []
 
 	if 'DEFW_PATH' not in os.environ:
 		defw_path = os.getcwd()
@@ -1124,11 +1137,9 @@ def configure_defw():
 		defw_path = os.environ['DEFW_PATH']
 
 	if 'DEFW_CONFIG_PATH' not in os.environ:
-		config = os.path.join(defw_path, "python", "config", "defw.yaml")
+		config = os.path.join(defw_path, "python", "config", "defw_generic.yaml")
 	else:
 		config = os.environ['DEFW_CONFIG_PATH']
-	print(config)
-	print(defw_path)
 
 	cy = None
 	if os.path.isfile(config):
@@ -1136,14 +1147,27 @@ def configure_defw():
 			cy = yaml.load(f, Loader=yaml.FullLoader)
 			resolve_environment_vars(cy)
 			cdefw_global.set_defw_path(cy['defw']['path'])
-			cdefw_global.set_parent_name(cy['defw']['parent-name'])
-			cdefw_global.set_parent_address(cy['defw']['parent-address'])
-			cdefw_global.set_parent_port(int(cy['defw']['parent-port']))
-			try:
-				cdefw_global.set_parent_hostname(cy['defw']['parent-hostname'])
-			except:
-				pass
-			cdefw_global.set_hostname(socket.gethostname())
+			if not cdefw_global.resmgr_disabled():
+				cdefw_global.set_parent_name(cy['defw']['parent-name'])
+				cdefw_global.set_parent_port(int(cy['defw']['parent-port']))
+				if 'parent-address' not in cy['defw'] and 'parent-hostname' not in cy['defw']:
+					raise DEFwError("No Parent configured for this process. Can not proceed")
+				try:
+					cdefw_global.set_parent_address(cy['defw']['parent-address'])
+				except:
+					pass
+				try:
+					cdefw_global.set_parent_hostname(cy['defw']['parent-hostname'])
+				except:
+					pass
+				cdefw_global.set_hostname(socket.gethostname())
+			else:
+				cdefw_global.set_parent_name('None')
+				cdefw_global.set_parent_port(0)
+				cdefw_global.set_parent_address('0.0.0.0')
+				cdefw_global.set_parent_hostname('None')
+				cdefw_global.set_hostname('None')
+
 			cdefw_global.set_defw_mode(cy['defw']['shell'])
 			cdefw_global.set_defw_type(cy['defw']['type'])
 			try:
@@ -1161,6 +1185,10 @@ def configure_defw():
 					cdefw_global.set_listen_port(8091)
 				else:
 					cdefw_global.set_listen_port(8090)
+			try:
+				cdefw_global.set_agent_telnet_port(int(cy['defw']['telnet-port']))
+			except:
+				cdefw_global.set_agent_telnet_port(random.randint(10000,20000))
 			try:
 				cdefw_global.set_node_name(cy['defw']['name'])
 			except:
@@ -1204,15 +1232,13 @@ def get_agent(target):
 			return agent_dict[agidx]
 	return None
 
-updater_queue = queue.Queue()
-
 def updater_thread():
 	global resmgr
 
 	shutdown = False
 	while not shutdown:
 		try:
-			event = updater_queue.get(timeout = 100)
+			event = updater_queue.get(timeout = 1)
 			if event['type'] == 'shutdown':
 				shutdown = True
 				continue
@@ -1235,6 +1261,8 @@ def get_self():
 	return me
 
 if not cdefw_global.get_defw_initialized():
+	updater_queue = queue.Queue()
+
 	defw_cfg = configure_defw()
 
 	py_log_path = cdefw_global.get_defw_tmp_dir()
@@ -1292,4 +1320,3 @@ if not cdefw_global.get_defw_initialized():
 	updater_thread.start()
 
 	cdefw_global.set_defw_initialized(True)
-

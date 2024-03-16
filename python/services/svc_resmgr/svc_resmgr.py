@@ -144,7 +144,8 @@ class DEFwResMgr:
 	Raises:
 		DEFwCommError: If Resource Manager is not reachable
 	"""
-	def get_services(self, service_filter=None):
+	def get_services(self, service_filter=''):
+		logging.debug(f"get_services({service_filter})")
 		services = {}
 		self.__reload_resources()
 		for k, v in self.__active_services_db.items():
