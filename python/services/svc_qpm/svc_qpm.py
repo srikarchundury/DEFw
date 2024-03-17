@@ -277,8 +277,12 @@ class QPM:
 	def reserve(self, svc, client_ep, *args, **kwargs):
 		logging.debug(f"{client_ep} reserved the {svc}")
 
-	def release(self, services):
+	def release(self, services=None):
 		self.runner_shutdown = True
+
+	def shutdown(self):
+		self.runner_shutdown = True
+		me.exit()
 
 	def test(self):
 		return "****QPM Test Successful****"

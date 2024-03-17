@@ -1,7 +1,7 @@
 from defw_agent_info import *
 from defw_util import prformat, fg, bg
 from defw import me
-import logging, uuid, time, queue, threading, logging, sys, os, io, contextlib
+import logging, uuid, time, queue, threading, sys, os, io, contextlib
 import importlib
 from defw_exception import DEFwError, DEFwExists, DEFwExecutionError
 import svc_launcher, cdefw_global
@@ -207,6 +207,7 @@ class QRC:
 		raise DEFwExecutionError(error_str)
 
 	def sync_run(self, cid, info):
+		logging.debug(f"Fake run of circuit {cid}")
 		self.create_circuit(cid, info)
 		return self.run_circuit(cid)
 

@@ -5,7 +5,7 @@ main(int argc, char *argv[])
 {
 	defw_rc_t rc;
 
-	rc = defw_start(argc, argv, false);
+	rc = defw_start(argc, argv);
 
 	switch (rc) {
 	case EN_DEFW_RC_LOG_CREATION_FAILURE:

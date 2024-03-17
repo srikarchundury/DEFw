@@ -8,7 +8,7 @@ import importlib, socket
 import cdefw_global
 from defw_agent import DEFwClientAgents, DEFwServiceAgents, \
 	 DEFwActiveClientAgents, DEFwActiveServiceAgents, Endpoint
-import netifaces
+import netifaces, random
 import os, subprocess, sys, yaml, fnmatch, logging, csv, uuid, io
 import shutil, traceback, datetime, re, copy, threading, queue, time
 from defw_util import prformat, fg, bg, generate_random_string, \
@@ -870,6 +870,14 @@ class Myself:
 									socket.gethostname(),
 									cdefw_global.get_defw_type(),
 									cdefw_global.get_defw_uuid())
+		# Write the pid of the process in the file so it can be used to
+		# monitor my life
+		pid_path = os.path.join(cdefw_global.get_defw_tmp_dir(), 'pid')
+		logging.debug(f"Path to PID file is {pid_path}")
+		with open(pid_path, 'w') as f:
+			logging.debug(f"WRITING PID TO FILE: {os.getpid()}")
+			f.write(str(os.getpid()))
+
 
 	def is_self(self, target):
 		rc = target.name.upper() == self.my_name().upper() and \
@@ -923,6 +931,9 @@ class Myself:
 		updater_thread.join()
 		print("Shutting down the DEFw")
 		print_all_thread_stack_traces_to_logger()
+		from defw_telnet_sr import g_tns
+		if g_tns:
+			g_tns.stop()
 		exit()
 
 	def get_cpuinfo(self):

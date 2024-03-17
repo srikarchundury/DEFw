@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include "defw_common.h"
 
-defw_rc_t defw_start(int argc, char *argv[], bool daemon);
+defw_rc_t defw_start(int argc, char *argv[]);
 void defw_shutdown(void);
 defw_rc_t defw_exec_py(char *py_code);
 

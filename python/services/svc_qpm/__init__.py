@@ -136,7 +136,8 @@ def start_qrcs(num_qrc, host_list):
 				found_hosts.append(r['residence'].hostname)
 				found_launchers.append({k:r})
 		if len(found_hosts) != len_host_list:
-			logging.debug("Waiting to connect to launcher")
+			logging.debug("Waiting to connect to launcher. " \
+				f"Got {len(found_hosts)}, expecting {len_host_list}")
 			sleep(1)
 		else:
 			complete = True
@@ -164,7 +165,9 @@ def start_qrcs(num_qrc, host_list):
 	if num_qrc_pn == 0:
 		remaining_qrc = num_qrc
 		# we have more nodes than processes. Put one process per node
-		for api in launcher_apis and remaining_qrc > 0:
+		for api in launcher_apis:
+			if remaining_qrc <= 0:
+				break
 			base_port += 1
 			spawn_qrc(api, base_port)
 			remaining_qrc -= 1

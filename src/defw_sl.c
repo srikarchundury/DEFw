@@ -49,16 +49,18 @@ defw_help_usage(const struct option *long_options, const char *const description
 	fprintf(stderr, "\n");
 }
 
-defw_run_mode_t handle_cmd_line_opt(int argc, char *argv[], char **module, char **pycmd)
+defw_run_mode_t handle_cmd_line_opt(int argc, char *argv[], char **module, char **pycmd,
+				    bool *spawned)
 {
 	int cOpt;
 	defw_run_mode_t shell = EN_DEFW_RUN_CMD_LINE;
 	/* If followed by a ':', the option requires an argument*/
-	const char *const short_options = "c:m:dh";
+	const char *const short_options = "c:m:dxh";
 	const struct option long_options[] = {
 		{.name = "cmd", .has_arg = required_argument, .val = 'c'},
 		{.name = "module", .has_arg = required_argument, .val = 'm'},
 		{.name = "deamon", .has_arg = no_argument, .val = 'd'},
+		{.name = "execvp", .has_arg = no_argument, .val = 'x'},
 		{.name = "help", .has_arg = no_argument, .val = 'h'},
 		{NULL, 0, NULL, 0}
 	};
@@ -99,6 +101,9 @@ defw_run_mode_t handle_cmd_line_opt(int argc, char *argv[], char **module, char 
 			case 'd':
 				shell = EN_DEFW_RUN_DAEMON;
 				break;
+			case 'x':
+				*spawned = true;
+				break;
 			case '?':
 				break;
 			default:
@@ -122,26 +127,27 @@ void handle_interrupt(int signum)
 	}
 }
 
-defw_rc_t defw_start(int argc, char *argv[], bool daemon)
+defw_rc_t defw_start(int argc, char *argv[])
 {
 	pthread_t l_thread_id;
 	defw_rc_t rc;
 	char *module = NULL, *cmd = NULL;
 	defw_run_mode_t shell;
 	char **local_argv;
+	bool spawned = false;
 
-	signal(SIGINT, handle_interrupt);
+	//signal(SIGINT, handle_interrupt);
 	/*
 	for (int i = 1; i < NSIG; i++) {
 	}
 	*/
 
-	local_argv = calloc(1, argc*sizeof(*local_argv));
+	local_argv = calloc(1, (argc+1)*sizeof(*local_argv));
 	memcpy(local_argv, argv, argc*sizeof(*local_argv));
 
-	shell = handle_cmd_line_opt(argc, argv, &module, &cmd);
+	shell = handle_cmd_line_opt(argc, argv, &module, &cmd, &spawned);
 
-	if (shell == EN_DEFW_RUN_DAEMON) {
+	if (shell == EN_DEFW_RUN_DAEMON && !spawned) {
 		pid_t process_id = 0;
 		pid_t sid = 0;
 
@@ -176,6 +182,13 @@ defw_rc_t defw_start(int argc, char *argv[], bool daemon)
 			PERROR("chdir failed");
 			return EN_DEFW_RC_ERR_THREAD_STARTUP;
 		}
+
+		local_argv[argc] = "-x";
+		local_argv[argc+1] = NULL;
+		execvp(local_argv[0], local_argv);
+
+		PERROR("Failed to execvp");
+		exit(DEFW_EXIT_ERR_DEAMEON_STARTUP);
 	}
 
 	memset(&g_defw_cfg, 0, sizeof(g_defw_cfg));
@@ -220,8 +233,6 @@ defw_rc_t defw_start(int argc, char *argv[], bool daemon)
 
 	switch (shell) {
 	case EN_DEFW_RUN_INTERACTIVE:
-		//sleep(60);
-
 		rc = python_run_interactive_shell();
 		if (rc) {
 			PERROR("Failed to run python interactively");
@@ -229,6 +240,7 @@ defw_rc_t defw_start(int argc, char *argv[], bool daemon)
 			return rc;
 		}
 		defw_shutdown();
+		break;
 	case EN_DEFW_RUN_CMD_LINE:
 		rc = python_run_cmd_line(argc-1, local_argv+1, module, cmd);
 		/* once Python is done execution of whatever was passed to
@@ -245,6 +257,7 @@ defw_rc_t defw_start(int argc, char *argv[], bool daemon)
 			defw_shutdown();
 			return rc;
 		}
+		defw_shutdown();
 		break;
 	default:
 		PERROR("Unexpected shell type: %d\n", g_defw_cfg.shell);

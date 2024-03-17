@@ -1,11 +1,12 @@
 from defw_agent_info import *
 from defw_util import prformat, fg, bg
 from defw import me
-import os, subprocess, copy, yaml, logging, sys, threading
+import os, subprocess, copy, yaml, logging, sys, threading, socket
 from time import sleep
 from defw_exception import DEFwError, DEFwInProgress
 sys.path.append(os.path.split(os.path.abspath(__file__))[0])
 import launcher_common as common
+from defw_cmd import defw_exec_remote_cmd
 
 class Process:
 	def __init__(self, cmd, env, path):
@@ -92,7 +93,30 @@ class Launcher:
 			sleep(1)
 		logging.debug("Monitor thread shutdown")
 
-	def launch(self, cmd, env=None, path='', wait=False):
+	def compose_remote_cmd(self, exe, env, use, modules, python_env):
+		# Start the DVM on the second node in the Simulation Environment
+		# because currently MPI can not co-exist on the DVM's head node.
+		# Our launcher will live on node 0
+		cmd = "; ".join([f"export {var_name}={var_value}" \
+			for var_name, var_value in env.items()]) + ';'
+		for u in use.split(':'):
+			cmd += f"module use {u};"
+		for m in modules.split(':'):
+			cmd += f"module load {m};"
+		cmd += f"source {python_env}"
+		cmd += f"; {exe}"
+		return cmd
+
+	def run_cmd_on_target(self, exe, env, use, modules, python_env, target):
+		rcmd = self.compose_remote_cmd(exe, env, use, modules, python_env)
+		defw_exec_remote_cmd(rcmd, target, deamonize=True)
+
+	def launch(self, cmd, env=None, path='', wait=False,
+			   target=None, muse='', modules='', python_env=''):
+		logging.debug(f"Starting {cmd} on {target}")
+		if target and target != socket.gethostname():
+			self.run_cmd_on_target(cmd, env, muse, modules, python_env, target)
+			return 0
 		proc = Process(cmd, env, path)
 		# if we're going to wait for it keep it around until we get
 		# the result
@@ -136,6 +160,28 @@ class Launcher:
 				del self.__proc_dict[pid]
 		logging.debug("Launcher Service shutdown requested")
 		common.shutdown = True
+
+	def blocking_wait(self, pid=-1):
+		while True:
+			logging.debug(f"Waiting on pid {pid}")
+			if pid == -1:
+				if len(self.__proc_dict) == 0:
+					break;
+				rm_pid = []
+				for pid, proc in self.__proc_dict.items():
+					if proc.poll():
+						rm_pid.append(pid)
+				for pid in rm_pid:
+					del self.__proc_dict[pid]
+			else:
+				if pid in self.__proc_dict.keys() and \
+				   self.__proc_dict[pid].poll():
+					logging.debug(f"PID {pid} exited")
+					self.__proc_dict[pid].terminate()
+					del self.__proc_dict[pid]
+					break
+			sleep(1)
+		logging.debug("launcher.blocking_wait() completed")
 
 	def query(self):
 		from . import svc_info
