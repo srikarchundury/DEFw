@@ -76,6 +76,8 @@ class QRC:
 		self.circuit_results = []
 		self.runner_shutdown = False
 		self.module_util = None
+		self.colocated_dvm = False
+		self.is_colocated_dvm()
 		if start:
 			self.runner = threading.Thread(target=self.runner, args=())
 			self.runner.start()
@@ -83,6 +85,19 @@ class QRC:
 	def __del__(self):
 		self.runner_shutdown = True
 		self.runner_queue.put(-1)
+
+	def is_colocated_dvm(self):
+		import psutil
+		pids = psutil.pids()
+		for pid in pids:
+			try:
+				proc = psutil.Process(pid)
+				if "prte" == proc.name():
+					logging.debug(f"Found prte: {proc}")
+					self.colocated_dvm = True
+					return
+			except:
+				continue
 
 	def runner(self):
 		logging.debug(f"starting QRC main loop: {sys.path}")
@@ -141,8 +156,7 @@ class QRC:
 		if not self.module_util:
 			self.import_module_util()
 
-		module_use = modules['use'].split(':')
-		for use in module_use:
+		for use in modules['use']:
 			self.module_util.module("use", use)
 		for mod in modules['mods']:
 			self.module_util.module("load", mod)
@@ -152,6 +166,8 @@ class QRC:
 		logging.debug(f"Module loaded\n{mod_list[1]}")
 
 	def form_cmd(self, circ, qasm_file):
+		import shutil
+
 		info = circ.info
 
 		# TODO: we need to provide a DVM URI
@@ -161,40 +177,73 @@ class QRC:
 		else:
 			compiler = info['compiler']
 
-		circuit_runner = os.path.join(info['qfw_circuit_runner_path'], 'circuit_runner')
+		circuit_runner = shutil.which(info['qfw_circuit_runner_path'])
+		gpuwrapper = shutil.which("gpuwrapper.sh")
 
-		cmd = f'{info["exec"]} --dvm search -x LD_LIBRARY_PATH --mca btl ^tcp,ofi,vader,openib ' \
+		if not circuit_runner or not gpuwrapper:
+			raise DEFwExecutionError("Couldn't find circuit_runner or gpuwrapper. Check paths")
+
+		if not os.path.exists(info["qfw_dvm_uri_path"].split('file:')[1]):
+			raise DEFwExecutionError(f"dvm-uri {info['qfw_dvm_uri_path']} doesn't exist")
+
+		hosts = ",".join(f"{node}:*" for node in info["hosts"])
+
+		if self.colocated_dvm:
+			dvm = info["qfw_dvm_uri_path"]
+		else:
+			dvm = "search"
+
+		exec_cmd = shutil.which(info["exec"])
+		#exec_cmd = info["exec"]
+
+#		cmd = f'{circuit_runner} ' \
+#			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]} ' \
+#			  f'-c {compiler} -v'
+		cmd = f'{exec_cmd} --dvm {dvm} -x LD_LIBRARY_PATH ' \
+			  f'--mca btl ^tcp,ofi,vader,openib ' \
 			  f'--mca pml ^ucx --mca mtl ofi --mca opal_common_ofi_provider_include '\
 			  f'{info["provider"]} --map-by {info["mapping"]} --bind-to core '\
-			  f'--np {info["np"]} --host {",".join(info["hosts"])} {circuit_runner} -q {qasm_file} '\
-			  f'-b {info["num_qubits"]} -s {info["num_shots"]} -c {compiler}'
+			  f'--np {info["np"]} --host {hosts} {gpuwrapper} {circuit_runner} ' \
+			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]} ' \
+			  f'-c {compiler}'
 
 		return cmd
 
 	def run_circuit(self, cid):
 		circ = self.circuits[cid]
 
-		self.load_modules(circ.info["modules"])
+		#self.load_modules(circ.info["modules"])
 
 		tmp_dir = cdefw_global.get_defw_tmp_dir()
 
 		qasm_c = circ.info["qasm"]
-		logging.debug(f"Running Circuit\n{qasm_c}")
+		logging.debug(f"Writing circuit file to {tmp_dir}")
 		qasm_file = os.path.join(tmp_dir, str(cid)+".qasm")
 		with open(qasm_file, 'w') as f:
 			f.write(qasm_c)
 
-		cmd = self.form_cmd(circ, qasm_file)
-		logging.debug(f"Running {cmd}")
-
+		retries = 0
 		circ.set_running()
 		launcher = svc_launcher.Launcher()
-		try:
-			output, error, rc = launcher.launch(cmd, wait=True)
-		except Exception as e:
-			os.remove(qasm_file)
-			logging.critical(f"Failed to launch {cmd}")
-			raise e
+		while True:
+			logging.debug(f"Running Circuit\n{qasm_c}")
+			cmd = self.form_cmd(circ, qasm_file)
+			logging.debug(f"Running {cmd}")
+
+			try:
+				output, error, rc = launcher.launch(cmd, wait=True)
+				break
+			except Exception as e:
+				if retries < 3:
+					# I'm trying to handle the case where the DVM might
+					# not have started yet
+					self.is_colocated_dvm()
+					time.sleep(1)
+					retries += 1
+					continue
+				os.remove(qasm_file)
+				logging.critical(f"Failed to launch {cmd}")
+				raise e
 
 		os.remove(qasm_file)
 
@@ -202,12 +251,13 @@ class QRC:
 			circ.set_done()
 			return 0, output
 		circ.set_fail()
-		error_str = f"Circuit failed with {rc}:{output}:{error}"
+		self.is_colocated_dvm()
+		error_str = f"Circuit failed with {rc}:{output.decode('utf8')}:" \
+				f"{error.decode('utf-8')}:dvm {self.colocated_dvm}"
 		logging.debug(error_str)
 		raise DEFwExecutionError(error_str)
 
 	def sync_run(self, cid, info):
-		logging.debug(f"Fake run of circuit {cid}")
 		self.create_circuit(cid, info)
 		return self.run_circuit(cid)
 

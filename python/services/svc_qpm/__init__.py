@@ -61,6 +61,7 @@ def wait_for_all_qrcs():
 			qrc_api = defw.service_apis['QRC'].QRC(qrc_ep)
 			qrc_inst.add_qrc(qrc_api)
 			qrc_inst.status = QRCInstance.STATUS_CONNECTED
+			qrc_inst.ep = qrc_ep
 			connected += 1
 			logging.debug(f"QRC {qrc_inst.name} with key {qrc_key} connected")
 

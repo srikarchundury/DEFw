@@ -30,3 +30,7 @@ class QPM(BaseRemote):
 
 	def test(self):
 		pass
+
+	def shutdown(self):
+		pass
+

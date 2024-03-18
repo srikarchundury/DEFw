@@ -22,18 +22,12 @@ class Process:
 			for k, v in env.items():
 				self.__env[k] = v
 
-	def launch(self, deamonize=False):
+	def launch(self):
 		cmd = " ".join(self.__cmd)
-		logging.debug(f"Launch {cmd}:{deamonize} with env = \n--------\n{self.__appended_env}\n+++++++++")
 		try:
-			if deamonize:
-				self.__process = subprocess.Popen(self.__cmd, env=self.__env,
-								stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-								stdin=subprocess.PIPE, start_new_session=True)
-			else:
-				self.__process = subprocess.Popen(self.__cmd, env=self.__env,
-								stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-								stdin=subprocess.PIPE, start_new_session=True)
+			self.__process = subprocess.Popen(self.__cmd, env=self.__env,
+							stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+							stdin=subprocess.PIPE, start_new_session=True)
 			self.__pid = self.__process.pid
 		except Exception as e:
 			logging.critical(f"hit exception: {e}")
@@ -120,7 +114,7 @@ class Launcher:
 		proc = Process(cmd, env, path)
 		# if we're going to wait for it keep it around until we get
 		# the result
-		proc.launch(deamonize=(not wait))
+		proc.launch()
 		self.__proc_dict[proc.getpid()] = proc
 		pid = proc.getpid()
 		if not wait:

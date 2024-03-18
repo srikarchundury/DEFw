@@ -30,6 +30,7 @@ class QRCInstance:
 		self.load = 0
 		self.pid = pid
 		self.status = QRCInstance.STATUS_UNKNOWN
+		self.ep = None
 
 	def add_qrc(self, qrc):
 		self.instance = qrc
@@ -57,23 +58,41 @@ class Circuit:
 			self.info['exec'] = os.environ['QFW_LAUNCHER_BIN']
 		except:
 			self.info['exec'] = 'mpirun'
-		module_use = os.environ['QFW_MODULE_USE_PATH']
-		self.info['modules'] = {'use': module_use,
-				'mods': ['openmpi', 'rocm', 'cray-python', 'tnqvm']}
+
+		try:
+			# QFW_MODULE_USE_PATH is in the format:
+			#	path/to/use1:path/to/use2:...
+			module_use = os.environ['QFW_MODULE_USE_PATH']
+			self.info['modules'] = {'use': module_use.split(':')}
+			# QFW_MODULE_LOADS is in the format:
+			#	mod1,mod2,...
+			mods = os.environ['QFW_MODULE_LOADS']
+			self.info['modules']['mods'] =  mods.split(',')
+		except:
+			self.info['modules'] = {}
+			self.info['modules']['use'] = ''
+			self.info['modules']['mods'] = ''
+
 		self.info['provider'] = 'shm+cxi:linkx'
 		self.info['mapping'] = 'ppr:1:l3cache'
 		try:
 			self.info['qfw_circuit_runner_path'] = os.environ['QFW_CIRCUIT_RUNNER_PATH']
 		except:
-			self.info['qfw_circuit_runner_path'] = ''
+			self.info['qfw_circuit_runner_path'] = 'circuit_runner'
+		try:
+			self.info['qfw_dvm_uri_path'] = \
+				f"file:{os.environ['QFW_DVM_URI_PATH']}"
+		except:
+			self.info['qfw_dvm_uri_path'] = 'search'
 
 		# each 10 qubits requires 1 node added to the simulation
-		np = self.info['num_qubits'] / 10
-		if not np:
+		np = int(self.info['num_qubits'] / 10)
+		if np < 1:
 			np = 1
 		else:
 			np = self.round_to_nearest_power_of_two(np)
 		self.info['np'] = np
+		logging.debug(f"Setting number of processes to: {self.info['np']}")
 
 	def getState(self):
 		return self.__state
@@ -155,6 +174,7 @@ class QPM:
 			raise DEFwOutOfResources("Not enough nodes to run simulation")
 
 		circ.info['hosts'] = self.free_hosts[:num_hosts]
+		logging.debug(f"Setting up MPI to run on {info['np']} {num_hosts} {circ.info['hosts']}")
 		self.inuse_hosts += self.free_hosts[:num_hosts]
 		self.free_hosts = self.free_hosts[num_hosts:]
 		qrc = common.QRC_list[self.qrc_rr % len(common.QRC_list)]
@@ -183,12 +203,14 @@ class QPM:
 			raise DEFwNotReady("QPM has not initialized properly")
 
 		circuit = self.common_run(cid)
+		result = '{}'
 		try:
-			circuit.assigned_qrc.instance.sync_run(cid, circuit.info)
+			rc, output = circuit.assigned_qrc.instance.sync_run(cid, circuit.info)
 		except Exception as e:
 			self.free_resources(circuit)
 			raise e
 		self.free_resources(circuit)
+		return rc, output
 
 	def async_run(self, cid):
 		if not common.g_qpm_initialized:
@@ -278,11 +300,17 @@ class QPM:
 		logging.debug(f"{client_ep} reserved the {svc}")
 
 	def release(self, services=None):
-		self.runner_shutdown = True
+		pass
+
+	def schedule_shutdown(self, timeout=5):
+		logging.debug(f"Shutting down in {timeout} seconds")
+		time.sleep(timeout)
+		me.exit()
 
 	def shutdown(self):
-		self.runner_shutdown = True
-		me.exit()
+		logging.debug("Scheduling QPM Shutdown")
+		ss = threading.Thread(target=self.schedule_shutdown, args=())
+		ss.start()
 
 	def test(self):
 		return "****QPM Test Successful****"

@@ -99,7 +99,7 @@ def expand_host_list(expr):
 	open_br = expr.find('[')
 	close_br = expr.find(']', open_br)
 	if open_br == -1 and close_br == -1:
-		return [expr]
+		return expr.split(',')
 
 	if open_br == -1 or close_br == -1:
 		return []

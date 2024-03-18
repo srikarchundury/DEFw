@@ -16,7 +16,7 @@ class BaseAgentAPI(BaseRemote):
 		for svc, module in services:
 			if module.svc_info['name'] == 'Resource Manager':
 				logging.debug("Can't query Resource Manager");
-				return
+				continue
 			for c in module.service_classes:
 				obj = c(start=False)
 				return obj.query()
