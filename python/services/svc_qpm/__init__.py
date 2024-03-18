@@ -135,7 +135,12 @@ def start_qrcs(num_qrc, host_list):
 			if r['residence'].hostname in host_list and \
 			   r['residence'].hostname not in found_hosts:
 				found_hosts.append(r['residence'].hostname)
-				found_launchers.append({k:r})
+				# if the launcher is on the same host as me, then insert
+				# it at the beginning of the list so we prefer it for use.
+				if r['residence'].hostname == defw.me.my_hostname():
+					found_launchers.insert(0, {k:r})
+				else:
+					found_launchers.append({k:r})
 		if len(found_hosts) != len_host_list:
 			logging.debug("Waiting to connect to launcher. " \
 				f"Got {len(found_hosts)}, expecting {len_host_list}")

@@ -9,6 +9,15 @@ import svc_launcher, cdefw_global
 CID_COUNTER = 0
 QCR_VERBOSE = 1
 
+def dump_tmp_dir():
+	try:
+		for root, dirs, files in os.walk('/tmp'):
+			logger.info(f"Directory: {root}")
+			for file in files:
+				logger.info(f"  File: {os.path.join(root, file)}")
+	except:
+		pass
+
 class CircuitStates:
 	UNDEF = 0
 	READY = 1
@@ -188,6 +197,7 @@ class QRC:
 
 		hosts = ",".join(f"{node}:*" for node in info["hosts"])
 
+		dump_tmp_dir()
 		if self.colocated_dvm:
 			dvm = info["qfw_dvm_uri_path"]
 		else:
