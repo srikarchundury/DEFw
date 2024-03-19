@@ -75,6 +75,9 @@ static defw_rc_t python_setup(void)
 */
 	/* all other paths are figured out within python */
 	snprintf(buf, sizeof(buf),
+		"sys.path.append('.')");
+	RUN_PYTHON_CMD(buf);
+	snprintf(buf, sizeof(buf),
 		"sys.path.append(os.path.join('%s', 'python', 'infra'))", infra);
 	RUN_PYTHON_CMD(buf);
 	snprintf(buf, sizeof(buf),
@@ -131,7 +134,7 @@ defw_rc_t python_run_interactive_shell(void)
 		"\tI() = me.dump_intfs()\\n"
 		"\tX() = me.exit()\\n"
 		"Convenience Objects: \\n"
-		"\\tme - Instance of this ISL\\n"
+		"\\tme - Instance of this DEFw\\n"
 		"\\texperiments - All experiment scripts\\n"
 		"\\tservices - Available services to offer\\n"
 		"\\tservice_apis - Available service interface APIs\\n')";

@@ -93,9 +93,33 @@ def get_lscpu():
 			cpuinfo[key.strip()] = value.strip()
 	return cpuinfo
 
-def expand_host_list(expr):
+def split_on_commas(expr):
+	l = []
+	c = o = 0
+	s = expr
+	stop = False
+	while not stop and c != -1 and o != -1:
+		o = s.find('[')
+		b = s.find(']')
+		c = s.find(',')
+		while c > o and c < b:
+			c = s.find(',', c+1)
+		if len(l):
+			l.pop()
+		if c < o or c > b:
+			l += [s[:s.find(',', c)], s[s.find(',', c)+1:]]
+			s = l[-1]
+		else:
+			l += s.split(',')
+			stop = True
+	for i in range(0, len(l)):
+		l[i] = l[i].strip()
+	return l
+
+def expand_host_list_sub(expr):
 	host_list = []
 
+	# first phase split on the commas first
 	open_br = expr.find('[')
 	close_br = expr.find(']', open_br)
 	if open_br == -1 and close_br == -1:
@@ -120,6 +144,13 @@ def expand_host_list(expr):
 			pre = "{:0%dd}" % len(cur[0])
 			host_list.append(f'{node}{pre.format(int(cur[0]))}')
 
+	return host_list
+
+def expand_host_list(expr):
+	l = split_on_commas(expr)
+	host_list = []
+	for e in l:
+		host_list += expand_host_list_sub(e)
 	return host_list
 
 def get_thread_names():

@@ -179,8 +179,6 @@ class QRC:
 
 		info = circ.info
 
-		# TODO: we need to provide a DVM URI
-		#
 		if 'compiler' not in info:
 			compiler = 'staq'
 		else:
@@ -195,7 +193,9 @@ class QRC:
 		if not os.path.exists(info["qfw_dvm_uri_path"].split('file:')[1]):
 			raise DEFwExecutionError(f"dvm-uri {info['qfw_dvm_uri_path']} doesn't exist")
 
-		hosts = ",".join(f"{node}:*" for node in info["hosts"])
+		hosts = ''
+		for k, v in info["hosts"].items():
+			hosts += f"{k}:{v}"
 
 		dump_tmp_dir()
 		if self.colocated_dvm:

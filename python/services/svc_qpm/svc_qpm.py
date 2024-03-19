@@ -11,6 +11,10 @@ import qpm_common as common
 
 CID_COUNTER = 0
 QCR_VERBOSE = 1
+# Maximum number of processes per node
+MAX_PPN = 8
+# Maximum number of qubits per process
+MAX_QUBITS_PP = 10
 
 class CircuitStates:
 	UNDEF = 0
@@ -86,7 +90,7 @@ class Circuit:
 			self.info['qfw_dvm_uri_path'] = 'search'
 
 		# each 10 qubits requires 1 node added to the simulation
-		np = int(self.info['num_qubits'] / 10)
+		np = int(self.info['num_qubits'] / MAX_QUBITS_PP)
 		if np < 1:
 			np = 1
 		else:
@@ -139,8 +143,18 @@ class QPM:
 		self.runner_queue = queue.Queue()
 		self.circuit_results = []
 		self.qrc_rr = 0
-		self.free_hosts = expand_host_list(os.environ['QFW_QPM_ASSIGNED_HOSTS'])
+		self.setup_host_resources()
+		self.free_hosts = {}
 		self.inuse_hosts = []
+
+	def setup_host_resources(self):
+		hl = expand_host_list(os.environ['QFW_QPM_ASSIGNED_HOSTS'])
+		for h in hl:
+			comp = h.split(':')
+			if len(comp) == 1:
+				self.free_hosts[comp[0]] = MAX_PPN
+			elif len(comp) == 2:
+				self.free_hosts[comp[0]] = int(comp[1])
 
 	def parse_result(self, result):
 		i = 0
@@ -211,30 +225,56 @@ class QPM:
 
 	def consume_resources(self, circ):
 		info = circ.info
-		num_hosts = int(info['np'] / 8)
+		np = info['np']
+		num_hosts = int(np / MAX_PPN)
 		if not num_hosts:
 			num_hosts = 1
 
 		# determine if we have enough hosts to run this circuit
 		# If the number of hosts required is more than the total number
 		# of hosts then we can't run the circuit.
-		if num_hosts > len(self.free_hosts):
+		if num_hosts > len(self.free_hosts.keys()):
 			raise DEFwOutOfResources("Not enough nodes to run simulation")
 
-		circ.info['hosts'] = self.free_hosts[:num_hosts]
-		logging.debug(f"Setting up MPI to run on {info['np']} {num_hosts} {circ.info['hosts']}")
-		self.inuse_hosts += self.free_hosts[:num_hosts]
-		self.free_hosts = self.free_hosts[num_hosts:]
+		tmp_resources = {}
+		consumed_res = {}
+		itrnp = 0
+		logging.debug(f"Available resources = {self.free_hosts}")
+		for host in self.free_hosts.keys():
+			if np == 0:
+				break;
+			tmp_resources[host] = self.free_hosts[host]
+			if self.free_hosts[host] >= np:
+				self.free_hosts[host] = self.free_hosts[host] - np
+				consumed_res[host] = np
+				itrnp += np
+				np = 0
+			elif self.free_hosts[host] < np and self.free_hosts[host] != 0:
+				np -= self.free_hosts[host]
+				itrnp += self.free_hosts[host]
+				consumed_res[host] = self.free_hosts[host]
+				self.free_hosts[host] = 0
+		if np != 0:
+			# restore whatever was consumed
+			for k, v in tmp_resources.items():
+				self.free_hosts[k] = v
+			raise DEFwOutOfResources("Not enough nodes to run simulation")
+
+		circ.info['hosts'] = consumed_res
+		logging.debug(f"Circuit consumed: {consumed_res}")
 		qrc = common.QRC_list[self.qrc_rr % len(common.QRC_list)]
 		qrc.load += 1
 		self.qrc_rr += 1
 		circ.assigned_qrc = qrc
 
 	def free_resources(self, circ):
-		circ_hosts = circ.info['hosts']
-		for h in circ_hosts:
-			self.inuse_hosts.remove(h)
-			self.free_hosts.append(h)
+		res = circ.info['hosts']
+		for host in res.keys():
+			if host not in self.free_hosts:
+				raise DEFwError(f"Circuit has untracked host: {host}")
+			if res[host] + self.free_hosts[host] > MAX_PPN:
+				raise DEFwError("Returning more resources than originally had")
+			self.free_hosts[host] += res[host]
 		if circ.assigned_qrc:
 			circ.assigned_qrc.load -= 1
 		circ.set_done()
