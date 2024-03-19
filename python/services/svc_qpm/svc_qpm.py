@@ -1,7 +1,7 @@
 from defw_agent_info import *
 from defw_util import prformat, fg, bg, expand_host_list
 from defw import me
-import logging, uuid, time, queue, threading, logging
+import logging, uuid, time, queue, threading, logging, yaml
 from defw_exception import DEFwError, DEFwNotReady
 import sys, os, re, math
 
@@ -142,6 +142,54 @@ class QPM:
 		self.free_hosts = expand_host_list(os.environ['QFW_QPM_ASSIGNED_HOSTS'])
 		self.inuse_hosts = []
 
+	def parse_result(self, result):
+		i = 0
+		ob = 0
+		b = 0
+		lines = result.split('\n')
+		for l in lines:
+			if len(l.strip()) > 0 and l.strip()[0] == '#':
+				b += 1
+				continue
+			i += 1
+			if "{" in l:
+				ob += 1
+			elif "}" in l:
+				ob -= 1
+			if ob == 0:
+				break
+
+		res = "\n".join(lines[b:i+1])
+		circ_result = yaml.safe_load(res)
+
+		all_stats = []
+		while True:
+			stats_dict = {}
+			ob = 0
+			j = 0
+			for l in lines[i:]:
+				j += 1
+				if "#MSG(TAL-SH" in l:
+					ob += 1
+				elif "#END_MSG" in l:
+					ob -= 1
+				if ob == 0:
+					break
+			stats = "\n".join(lines[i:i+j-1])
+			blk = lines[i:i+j-1]
+			if len(blk):
+				for e in blk:
+					kv = [ss for ss in e.split(':') if ss.strip()]
+					if len(kv) > 2:
+						stats_dict[kv[-1].strip()] = "----"
+					if len(kv) == 2:
+						stats_dict[kv[0].strip()] = kv[1].strip()
+				all_stats.append(stats_dict)
+			i = i+j
+			if i >= len(lines):
+				break
+		return circ_result, all_stats
+
 	def create_circuit(self, info):
 		if not common.g_qpm_initialized:
 			#raise DEFwNotReady("QPM has not initialized properly")
@@ -203,14 +251,16 @@ class QPM:
 			raise DEFwNotReady("QPM has not initialized properly")
 
 		circuit = self.common_run(cid)
-		result = '{}'
 		try:
 			rc, output = circuit.assigned_qrc.instance.sync_run(cid, circuit.info)
 		except Exception as e:
 			self.free_resources(circuit)
 			raise e
 		self.free_resources(circuit)
-		return rc, output
+		circ_result, stats = self.parse_result(output.decode('utf-8'))
+		logging.debug(f"Circuit results = {circ_result}")
+		logging.debug(f"stats = {stats}")
+		return rc, circ_result, stats
 
 	def async_run(self, cid):
 		if not common.g_qpm_initialized:

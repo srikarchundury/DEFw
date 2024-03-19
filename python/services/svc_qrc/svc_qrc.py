@@ -227,8 +227,8 @@ class QRC:
 		tmp_dir = cdefw_global.get_defw_tmp_dir()
 
 		qasm_c = circ.info["qasm"]
-		logging.debug(f"Writing circuit file to {tmp_dir}")
 		qasm_file = os.path.join(tmp_dir, str(cid)+".qasm")
+		logging.debug(f"Writing circuit file to {qasm_file}")
 		with open(qasm_file, 'w') as f:
 			f.write(qasm_c)
 
@@ -236,12 +236,13 @@ class QRC:
 		circ.set_running()
 		launcher = svc_launcher.Launcher()
 		while True:
-			logging.debug(f"Running Circuit\n{qasm_c}")
+			logging.debug(f"Running Circuit --\n{qasm_c}")
 			cmd = self.form_cmd(circ, qasm_file)
-			logging.debug(f"Running {cmd}")
+			logging.debug(f"Running -- {cmd}")
 
 			try:
 				output, error, rc = launcher.launch(cmd, wait=True)
+				logging.debug(f"COMMAND returned {rc}")
 				break
 			except Exception as e:
 				if retries < 3:
