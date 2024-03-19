@@ -1263,6 +1263,14 @@ def connect_to_services(endpoints):
 		active_service_agents.connect(ep)
 		logging.debug(f"Connection request finished: {ep}")
 
+def connect_to_resource(res, res_name):
+	ep = resmgr.reserve(me.my_endpoint(), res)
+	connect_to_services(ep)
+	class_obj = getattr(service_apis[res_name],
+						res[list(res.keys())[0]]['api'])
+	launcher_api = class_obj(ep[0])
+	return launcher_api
+
 # TODO: We need a way to disconnect endpoint
 
 def get_resmgr():

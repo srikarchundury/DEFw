@@ -154,7 +154,8 @@ def start_qrcs(num_qrc, host_list):
 
 	launcher_apis = []
 	for launcher in found_launchers:
-		launcher_apis.append(connect_to_launcher(launcher))
+		launcher_apis.append(defw.connect_to_resource(launcher, "Launcher"))
+		#launcher_apis.append(connect_to_launcher(launcher))
 
 	logging.debug(f"Here are the launcher APIs: {launcher_apis}")
 
