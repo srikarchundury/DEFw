@@ -65,6 +65,10 @@ class DEFwInProgress(DEFwError):
 	def __init__(self, msg='', arg=None, halt=False, nname=None):
 		super().__init__(msg, arg, halt, nname)
 
+class DEFwNotFound(DEFwError):
+	def __init__(self, msg='', arg=None, halt=False, nname=cdefw_global.get_node_name()):
+		super().__init__(msg, arg, halt, nname)
+
 class DEFwExists(DEFwError):
 	def __init__(self, msg='', arg=None, halt=False, nname=cdefw_global.get_node_name()):
 		super().__init__(msg, arg, halt, nname)

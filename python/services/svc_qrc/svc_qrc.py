@@ -123,14 +123,17 @@ class QRC:
 				rc, result = self.run_circuit(cid)
 			except Exception as e:
 				exception = e
+				result = e
+				rc = -1
 				pass
-			if exception:
-				rc = e
 			r = {'cid': cid, 'result': result, 'rc': rc}
+			logging.debug(f"Circuit {cid} completed")
 			self.circuit_results.append(r)
+			logging.debug(f"{len(self.circuit_results)} pending results")
 
 	def read_cq(self, cid=None):
 		if cid:
+			logging.debug(f"read_cq for {cid}: {len(self.circuit_results)}")
 			i = 0
 			for e in self.circuit_results:
 				if cid == e['cid']:
@@ -138,6 +141,7 @@ class QRC:
 					return r
 				i += 1
 		else:
+			logging.debug(f"read_cq for top: {len(self.circuit_results)}")
 			if len(self.circuit_results) > 0:
 				r = self.circuit_results.pop(0)
 				return r
@@ -195,6 +199,8 @@ class QRC:
 
 		hosts = ''
 		for k, v in info["hosts"].items():
+			if hosts:
+				hosts += ','
 			hosts += f"{k}:{v}"
 
 		dump_tmp_dir()
@@ -209,7 +215,7 @@ class QRC:
 #		cmd = f'{circuit_runner} ' \
 #			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]} ' \
 #			  f'-c {compiler} -v'
-		cmd = f'{exec_cmd} --dvm {dvm} -x LD_LIBRARY_PATH ' \
+		cmd = f'{exec_cmd} --dvm {dvm} -x FI_LOG_LEVEL -x LD_LIBRARY_PATH ' \
 			  f'--mca btl ^tcp,ofi,vader,openib ' \
 			  f'--mca pml ^ucx --mca mtl ofi --mca opal_common_ofi_provider_include '\
 			  f'{info["provider"]} --map-by {info["mapping"]} --bind-to core '\
@@ -220,6 +226,12 @@ class QRC:
 		return cmd
 
 	def run_circuit(self, cid):
+		# check that we can run on CXI
+		if "SLINGSHOT_VNIS" in os.environ:
+			logging.debug(f"Found SLINGSHOT_VNIS: {os.environ['SLINGSHOT_VNIS']}")
+		else:
+			logging.critical(f"Didn't find SLINGSHOT_VNIS")
+
 		circ = self.circuits[cid]
 
 		#self.load_modules(circ.info["modules"])
@@ -235,30 +247,24 @@ class QRC:
 		retries = 0
 		circ.set_running()
 		launcher = svc_launcher.Launcher()
-		while True:
-			logging.debug(f"Running Circuit --\n{qasm_c}")
-			cmd = self.form_cmd(circ, qasm_file)
-			logging.debug(f"Running -- {cmd}")
+		logging.debug(f"Running Circuit --\n{qasm_c}")
+		cmd = self.form_cmd(circ, qasm_file)
+		logging.debug(f"Running -- {cmd}")
 
-			try:
-				output, error, rc = launcher.launch(cmd, wait=True)
-				logging.debug(f"COMMAND returned {rc}")
-				break
-			except Exception as e:
-				if retries < 3:
-					# I'm trying to handle the case where the DVM might
-					# not have started yet
-					self.is_colocated_dvm()
-					time.sleep(1)
-					retries += 1
-					continue
-				os.remove(qasm_file)
-				logging.critical(f"Failed to launch {cmd}")
-				raise e
+		try:
+			env = {'FI_LOG_LEVEL': 'info'}
+			output, error, rc = launcher.launch(cmd, env=env, wait=True)
+			logging.debug(f"COMMAND returned {rc}")
+		except Exception as e:
+			os.remove(qasm_file)
+			logging.critical(f"Failed to launch {cmd}")
+			raise e
 
+		logging.debug(f"Removing {qasm_file}")
 		os.remove(qasm_file)
 
 		if not rc:
+			logging.debug(f"Circuit {cid} successful")
 			circ.set_done()
 			return 0, output
 		circ.set_fail()

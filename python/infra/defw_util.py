@@ -1,4 +1,4 @@
-import time, yaml, string, io, traceback
+import time, yaml, string, io, traceback, math
 import random, os, threading, sys, logging
 from defw_cmd import defw_exec_local_cmd
 from defw_exception import DEFwError
@@ -210,5 +210,20 @@ def print_thread_stack_traces():
 	for thread_id, frame in frames.items():
 		print(f"Thread = {thread_id}: {tnames[thread_id]}")
 		traceback.print_stack(frame)
+
+def round_half_up(number):
+	whole_part = math.floor(number)
+	fractional_part = number - whole_part
+	if fractional_part >= 0.5:
+		return whole_part + 1
+	else:
+		return whole_part
+
+def round_to_nearest_power_of_two(number):
+	if number <= 0:
+		return 0  # or handle the case as needed
+
+	nearest_power_of_two = 2 ** int(math.log2(number) + 0.5)
+	return nearest_power_of_two
 
 

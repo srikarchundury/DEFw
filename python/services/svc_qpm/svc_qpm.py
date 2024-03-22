@@ -1,8 +1,8 @@
 from defw_agent_info import *
-from defw_util import prformat, fg, bg, expand_host_list
+from defw_util import expand_host_list, round_half_up, round_to_nearest_power_of_two
 from defw import me
 import logging, uuid, time, queue, threading, logging, yaml
-from defw_exception import DEFwError, DEFwNotReady
+from defw_exception import DEFwError, DEFwNotReady, DEFwInProgress
 import sys, os, re, math
 
 sys.path.append(os.path.split(os.path.abspath(__file__))[0])
@@ -47,13 +47,6 @@ class Circuit:
 		self.assigned_qrc = None
 		self.setup_circuit_run_details()
 
-	def round_to_nearest_power_of_two(self, number):
-		if number <= 0:
-			return 0  # or handle the case as needed
-
-		nearest_power_of_two = 2 ** int(math.log2(number) + 0.5)
-		return nearest_power_of_two
-
 	def setup_circuit_run_details(self):
 		# TODO: Make MPI configuration decisions based
 		# on the circuit meta data
@@ -90,13 +83,14 @@ class Circuit:
 			self.info['qfw_dvm_uri_path'] = 'search'
 
 		# each 10 qubits requires 1 node added to the simulation
-		np = int(self.info['num_qubits'] / MAX_QUBITS_PP)
+		np = round_half_up(self.info['num_qubits'] / MAX_QUBITS_PP)
 		if np < 1:
 			np = 1
 		else:
-			np = self.round_to_nearest_power_of_two(np)
+			np = round_to_nearest_power_of_two(np)
 		self.info['np'] = np
-		logging.debug(f"Setting number of processes to: {self.info['np']}")
+		logging.debug(f"Setting number of processes to: {self.info['np']} " \
+					  f"for num qubits: {self.info['num_qubits']}")
 
 	def getState(self):
 		return self.__state
@@ -143,9 +137,8 @@ class QPM:
 		self.runner_queue = queue.Queue()
 		self.circuit_results = []
 		self.qrc_rr = 0
-		self.setup_host_resources()
 		self.free_hosts = {}
-		self.inuse_hosts = []
+		self.setup_host_resources()
 
 	def setup_host_resources(self):
 		hl = expand_host_list(os.environ['QFW_QPM_ASSIGNED_HOSTS'])
@@ -174,7 +167,10 @@ class QPM:
 				break
 
 		res = "\n".join(lines[b:i+1])
-		circ_result = yaml.safe_load(res)
+		try:
+			circ_result = yaml.safe_load(res)
+		except:
+			return res, {}
 
 		all_stats = []
 		while True:
@@ -206,8 +202,7 @@ class QPM:
 
 	def create_circuit(self, info):
 		if not common.g_qpm_initialized:
-			#raise DEFwNotReady("QPM has not initialized properly")
-			raise RuntimeError("QPM has not initialized properly")
+			raise DEFwNotReady("QPM has not initialized properly")
 
 		cid = str(uuid.uuid4())
 		self.circuits[cid] = Circuit(cid, info)
@@ -215,6 +210,9 @@ class QPM:
 		return cid
 
 	def delete_circuit(self, cid):
+		if not common.g_qpm_initialized:
+			raise DEFwNotReady("QPM has not initialized properly")
+
 		if cid not in self.circuits:
 			return
 		circ = self.circuits[cid]
@@ -298,6 +296,9 @@ class QPM:
 			raise e
 		self.free_resources(circuit)
 		circ_result, stats = self.parse_result(output.decode('utf-8'))
+		# TODO: Where is the best place to parse the results. Current
+		# thinking would be in the QRC. The QRC is suppose to be
+		# simulation specific backend
 		logging.debug(f"Circuit results = {circ_result}")
 		logging.debug(f"stats = {stats}")
 		return rc, circ_result, stats
@@ -318,7 +319,8 @@ class QPM:
 		for qrc in common.QRC_list:
 			while (res := qrc.instance.read_cq()):
 				qrc.circuit_results.append(res)
-				circ = self.circuit[res['cid']]
+				logging.debug(f"{qrc.name} has {len(qrc.circuit_results)} pending results")
+				circ = self.circuits[res['cid']]
 				self.free_resources(circ)
 
 	def read_cq(self, cid=None):
@@ -328,7 +330,8 @@ class QPM:
 		self.read_all_qrc_cqs()
 		if cid:
 			if cid not in self.circuits:
-				return None
+				logging.error(f"request for untracked cid: {cid}")
+				raise DEFwNotFound(f"request for untracked cid: {cid}")
 			circ = self.circuits[cid]
 			qrc = circ.assigned_qrc
 			i = 0
@@ -341,8 +344,12 @@ class QPM:
 			for qrc in common.QRC_list:
 				if len(qrc.circuit_results) > 0:
 					r = qrc.circuit_results.pop(0)
+					logging.debug(f"Return Circuit Result: {r}")
 					return r
-		return None
+		if cid:
+			raise DEFwInProgress(f"{cid} still in progress")
+		else:
+			raise DEFwInProgress("No ready QTs")
 
 	def peek_cq(self, cid=None):
 		if not common.g_qpm_initialized:
@@ -376,7 +383,8 @@ class QPM:
 		return r
 
 	def is_ready(self):
-		return common.g_qpm_initialized
+		if not common.g_qpm_initialized:
+			raise DEFwNotReady("QPM has not initialized properly")
 
 	def query(self):
 		from . import svc_info
