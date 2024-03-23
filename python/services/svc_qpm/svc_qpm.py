@@ -71,7 +71,8 @@ class Circuit:
 			self.info['modules']['mods'] = ''
 
 		self.info['provider'] = 'shm+cxi:linkx'
-		self.info['mapping'] = 'ppr:1:l3cache'
+		#self.info['mapping'] = 'ppr:1:l3cache'
+		self.info['mapping'] = 'l3cache:pe=6'
 		try:
 			self.info['qfw_circuit_runner_path'] = os.environ['QFW_CIRCUIT_RUNNER_PATH']
 		except:
