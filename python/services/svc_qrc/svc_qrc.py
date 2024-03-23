@@ -79,21 +79,35 @@ def suppress_prints():
 	sys.stderr = original_stderr
 
 class QRC:
+	MAX_NUM_WORKERS = 8
+	THREAD_STATE_FREE = 0
+	THREAD_STATE_BUSY = 1
+
 	def __init__(self, start=True):
 		self.circuits = {}
-		self.runner_queue = queue.Queue()
+		self.circuit_results_lock = threading.Lock()
+		self.worker_pool_lock = threading.Lock()
 		self.circuit_results = []
 		self.runner_shutdown = False
 		self.module_util = None
 		self.colocated_dvm = False
 		self.is_colocated_dvm()
+		self.worker_pool = {}
 		if start:
-			self.runner = threading.Thread(target=self.runner, args=())
-			self.runner.start()
+			for x in range(0, QRC.MAX_NUM_WORKERS):
+				with self.worker_pool_lock:
+					runner = threading.Thread(target=self.runner, args=(x,))
+					logging.debug(f"inserting {x} in the worker pool")
+					self.worker_pool[x] = {'thread': runner,
+										   'queue': queue.Queue(),
+										   'state': QRC.THREAD_STATE_FREE}
+					runner.start()
 
 	def __del__(self):
 		self.runner_shutdown = True
-		self.runner_queue.put(-1)
+		with self.worker_pool_lock:
+			for k, v in self.worker_pool.items():
+				v['queue'].put(-1)
 
 	def is_colocated_dvm(self):
 		import psutil
@@ -108,11 +122,15 @@ class QRC:
 			except:
 				continue
 
-	def runner(self):
-		logging.debug(f"starting QRC main loop: {sys.path}")
+	def runner(self, my_id):
+		with self.worker_pool_lock:
+			if my_id not in self.worker_pool:
+				logging.debug(f"{my_id}: A worker thread is not part of the pool")
+			my_queue = self.worker_pool[my_id]['queue']
+		logging.debug(f"starting QRC main loop for {my_id}")
 		while not self.runner_shutdown:
 			try:
-				cid = self.runner_queue.get(timeout=1)
+				cid = my_queue.get(timeout=1)
 				if cid == -1:
 					self.runner_shutdown = True
 					continue
@@ -122,29 +140,33 @@ class QRC:
 			try:
 				rc, result = self.run_circuit(cid)
 			except Exception as e:
-				exception = e
 				result = e
 				rc = -1
 				pass
+			with self.worker_pool_lock:
+				self.worker_pool[my_id]['state'] = QRC.THREAD_STATE_FREE
 			r = {'cid': cid, 'result': result, 'rc': rc}
-			logging.debug(f"Circuit {cid} completed")
-			self.circuit_results.append(r)
-			logging.debug(f"{len(self.circuit_results)} pending results")
+			logging.debug(f"Circuit {cid} completed with result {r}")
+			with self.circuit_results_lock:
+				self.circuit_results.append(r)
+				logging.debug(f"{len(self.circuit_results)} pending results")
 
 	def read_cq(self, cid=None):
 		if cid:
-			logging.debug(f"read_cq for {cid}: {len(self.circuit_results)}")
-			i = 0
-			for e in self.circuit_results:
-				if cid == e['cid']:
-					r = self.circuit.pop(i)
-					return r
-				i += 1
+			with self.circuit_results_lock:
+				logging.debug(f"read_cq for {cid}: {len(self.circuit_results)}")
+				i = 0
+				for e in self.circuit_results:
+					if cid == e['cid']:
+						r = self.circuit.pop(i)
+						return r
+					i += 1
 		else:
-			logging.debug(f"read_cq for top: {len(self.circuit_results)}")
-			if len(self.circuit_results) > 0:
-				r = self.circuit_results.pop(0)
-				return r
+			with self.circuit_results_lock:
+				logging.debug(f"read_cq for top: {len(self.circuit_results)}")
+				if len(self.circuit_results) > 0:
+					r = self.circuit_results.pop(0)
+					return r
 		return None
 
 	def create_circuit(self, cid, info):
@@ -211,17 +233,19 @@ class QRC:
 
 		exec_cmd = shutil.which(info["exec"])
 		#exec_cmd = info["exec"]
+		output_file = qasm_file+".result"
 
 #		cmd = f'{circuit_runner} ' \
 #			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]} ' \
 #			  f'-c {compiler} -v'
-		cmd = f'{exec_cmd} --dvm {dvm} -x FI_LOG_LEVEL -x LD_LIBRARY_PATH ' \
+		cmd = f'{exec_cmd} --dvm {dvm} -x LD_LIBRARY_PATH ' \
 			  f'--mca btl ^tcp,ofi,vader,openib ' \
 			  f'--mca pml ^ucx --mca mtl ofi --mca opal_common_ofi_provider_include '\
 			  f'{info["provider"]} --map-by {info["mapping"]} --bind-to core '\
-			  f'--np {info["np"]} --host {hosts} {gpuwrapper} {circuit_runner} ' \
+			  f'--np {info["np"]} --host {hosts} {gpuwrapper} -v {circuit_runner} ' \
 			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]} ' \
 			  f'-c {compiler}'
+#			  f'-c {compiler} 2>&1 | tee {output_file}'
 
 		return cmd
 
@@ -280,8 +304,14 @@ class QRC:
 
 	def async_run(self, cid, info):
 		self.create_circuit(cid, info)
-		self.runner_queue.put(cid)
-		return cid
+		with self.worker_pool_lock:
+			for k, v in self.worker_pool.items():
+				if v['state'] == QRC.THREAD_STATE_FREE:
+					v['state'] = QRC.THREAD_STATE_BUSY
+					v['queue'].put(cid)
+					return cid
+		#TODO: find the one with the shortest queue
+		self.worker_pool[0]['queue'].put(cid)
 
 	def query(self):
 		from . import svc_info

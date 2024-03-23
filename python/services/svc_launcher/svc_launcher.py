@@ -25,6 +25,9 @@ class Process:
 	def launch(self):
 		cmd = " ".join(self.__cmd)
 		try:
+#			self.__process = subprocess.Popen(cmd, env=self.__env,
+#							stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+#							stdin=subprocess.PIPE, shell=True, start_new_session=False)
 			self.__process = subprocess.Popen(self.__cmd, env=self.__env,
 							stdout=subprocess.PIPE, stderr=subprocess.PIPE,
 							stdin=subprocess.PIPE, start_new_session=True)
@@ -36,6 +39,13 @@ class Process:
 
 	def get_result(self):
 		output, error = self.__process.communicate()
+#		while True:
+#			output += self.__process.stdout.readline()
+#			logging.debug(f"Got output: {output}")
+#			if output == b'' and self.__process.poll() is not None:
+#				break
+#		error = self.__process.stderr.read()
+
 		return output, error, self.__process.returncode
 
 	def kill(self):

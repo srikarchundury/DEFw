@@ -18,10 +18,10 @@ MAX_QUBITS_PP = 10
 
 class CircuitStates:
 	UNDEF = 0
-	READY = 1
-	RUNNING = 2
-	MARKED_FOR_DELETION = 3
-	DONE = 4
+	MARKED_FOR_DELETION = 1
+	DONE = 2
+	READY = 3
+	RUNNING = 4
 
 class QRCInstance:
 	STATUS_UNKNOWN = 1
@@ -94,6 +94,9 @@ class Circuit:
 
 	def getState(self):
 		return self.__state
+
+	def get_cid(self):
+		return self.__cid
 
 	def set_state(self, state):
 		# State is monotonically increasing
@@ -276,6 +279,7 @@ class QPM:
 		if circ.assigned_qrc:
 			circ.assigned_qrc.load -= 1
 		circ.set_done()
+		self.delete_circuit(circ.get_cid())
 
 	def common_run(self, cid):
 		self.read_all_qrc_cqs()
