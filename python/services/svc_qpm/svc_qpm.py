@@ -300,13 +300,14 @@ class QPM:
 			self.free_resources(circuit)
 			raise e
 		self.free_resources(circuit)
-		circ_result, stats = self.parse_result(output.decode('utf-8'))
+		return rc, output
+		#circ_result, stats = self.parse_result(output.decode('utf-8'))
 		# TODO: Where is the best place to parse the results. Current
 		# thinking would be in the QRC. The QRC is suppose to be
 		# simulation specific backend
-		logging.debug(f"Circuit results = {circ_result}")
-		logging.debug(f"stats = {stats}")
-		return rc, circ_result, stats
+		#logging.debug(f"Circuit results = {circ_result}")
+		#logging.debug(f"stats = {stats}")
+		#return rc, circ_result, stats
 
 	def async_run(self, cid):
 		if not common.g_qpm_initialized:

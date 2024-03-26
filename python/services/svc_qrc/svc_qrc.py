@@ -2,7 +2,7 @@ from defw_agent_info import *
 from defw_util import prformat, fg, bg
 from defw import me
 import logging, uuid, time, queue, threading, sys, os, io, contextlib
-import importlib
+import importlib, yaml
 from defw_exception import DEFwError, DEFwExists, DEFwExecutionError
 import svc_launcher, cdefw_global
 
@@ -233,7 +233,6 @@ class QRC:
 
 		exec_cmd = shutil.which(info["exec"])
 		#exec_cmd = info["exec"]
-		output_file = qasm_file+".result"
 
 #		cmd = f'{circuit_runner} ' \
 #			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]} ' \
@@ -289,7 +288,15 @@ class QRC:
 
 		if not rc:
 			logging.debug(f"Circuit {cid} successful")
-			circ.set_done()
+			try:
+				output_file = qasm_file+".result.r0"
+				with open(output_file, 'r') as f:
+					output = f.read()
+					output = yaml.safe_load(output)
+				os.remove(output_file)
+				circ.set_done()
+			except Exception as e:
+				output = "{result: missing, exception: "+ f"{e}"
 			return 0, output
 		circ.set_fail()
 		self.is_colocated_dvm()
