@@ -14,8 +14,8 @@
 #include <strings.h>
 #include <sys/time.h>
 #include <sys/ioctl.h>
-#include "defw.h"
-#include "defw_message.h"
+#include "defw_print.h"
+#include "libdefw_connect.h"
 
 static defw_rc_t doNonBlockingConnect(int iSockFd, struct sockaddr *psSA,
 				      int iSAlen, int iNsec)

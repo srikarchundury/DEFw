@@ -3,12 +3,18 @@
 
 #include "defw_common.h"
 
+typedef struct defw_agent_uuid_s {
+	uuid_t remote_uuid;  /* uuid of the remote process/agent */
+	uuid_t blk_uuid; /* assigned locally. unique to agent */
+} defw_agent_uuid_t;
+
 typedef enum {
 	EN_MSG_TYPE_HB = 0,
 	EN_MSG_TYPE_SESSION_INFO,
 	EN_MSG_TYPE_GET_NUM_AGENTS,
 	EN_MSG_TYPE_PY_REQUEST,
 	EN_MSG_TYPE_PY_RESPONSE,
+	EN_MSG_TYPE_PY_EVENT,
 	EN_MSG_TYPE_MAX
 } defw_msg_type_t;
 

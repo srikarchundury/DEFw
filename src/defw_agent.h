@@ -2,6 +2,7 @@
 #define DEFW_AGENTS_H
 
 #include "defw_common.h"
+#include "defw_message.h"
 
 #define MAX_NUM_AGENTS		1024
 #define HB_TO			2
@@ -20,11 +21,6 @@ struct dlist_entry {
 	struct dlist_entry	*prev;
 };
 #endif
-
-typedef struct defw_agent_uuid_s {
-	uuid_t remote_uuid;  /* uuid of the remote process/agent */
-	uuid_t blk_uuid; /* assigned locally. unique to agent */
-} defw_agent_uuid_t;
 
 typedef struct defw_agent_blk_s {
 	struct dlist_entry entry;

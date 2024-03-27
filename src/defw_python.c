@@ -101,7 +101,7 @@ static defw_rc_t python_setup(void)
 defw_rc_t python_run_interactive_shell(void)
 {
 	char *intro;
-	PyObject *globals, *main;
+	PyObject *globals, *pymain;
 
 	PDEBUG("Running in Interactive mode");
 	/*
@@ -113,8 +113,8 @@ defw_rc_t python_run_interactive_shell(void)
 	RUN_PYTHON_CMD("vars = globals().copy()\n");
 	RUN_PYTHON_CMD("vars.update(locals())\n");
 	RUN_PYTHON_CMD("shell = code.InteractiveConsole(vars)\n");
-	main = PyImport_AddModule("__main__");
-	globals = PyModule_GetDict(main);
+	pymain = PyImport_AddModule("__main__");
+	globals = PyModule_GetDict(pymain);
 	g_interactive_shell = PyDict_GetItemString(globals, "shell");
 	//Py_DECREF(main);
 	//Py_DECREF(globals);
@@ -277,6 +277,7 @@ typedef enum python_callbacks {
 	EN_PY_CB_RESPONSE,
 	EN_PY_CB_REFRESH,
 	EN_PY_CB_CONNECT,
+	EN_PY_CB_EVENT,
 	EN_PY_CB_MAX,
 } python_callbacks_t;
 
@@ -285,6 +286,7 @@ char *python_callback_str[EN_PY_CB_MAX] = {
 	"put_response",
 	"put_refresh",
 	"put_connect_complete",
+	"put_event",
 };
 
 PyGILState_STATE python_gil_ensure()
@@ -359,6 +361,11 @@ defw_rc_t python_handle_request(char *msg, char *uuid)
 defw_rc_t python_handle_response(char *msg, char *uuid)
 {
 	return python_handle_op(msg, EN_DEFW_RC_OK, uuid, EN_PY_CB_RESPONSE);
+}
+
+defw_rc_t python_handle_event(char *msg, char *uuid)
+{
+	return python_handle_op(msg, EN_DEFW_RC_OK, uuid, EN_PY_CB_EVENT);
 }
 
 defw_rc_t python_refresh_agent(void)

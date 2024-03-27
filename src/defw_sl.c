@@ -23,11 +23,9 @@
 #include "defw.h"
 #include "defw_sl.h"
 #include "libdefw_agent.h"
+#include "defw_print.h"
 
 extern defw_config_params_t g_defw_cfg;
-FILE *out;
-char *outlog;
-pthread_spinlock_t log_spin_lock;
 
 static void
 defw_help_usage(const struct option *long_options, const char *const description[])
@@ -193,7 +191,7 @@ defw_rc_t defw_start(int argc, char *argv[])
 
 	memset(&g_defw_cfg, 0, sizeof(g_defw_cfg));
 
-	pthread_spin_init(&log_spin_lock, PTHREAD_PROCESS_PRIVATE);
+	defw_init_logging();
 
 	/* generate global uuid for this instance */
 	uuid_generate(g_defw_cfg.uuid);

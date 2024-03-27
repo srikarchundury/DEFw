@@ -57,6 +57,7 @@ defw_rc_t python_collect_agent_core(char *ip);
  */
 defw_rc_t python_handle_request(char *rpc, char *uuid);
 defw_rc_t python_handle_response(char *rpc, char *uuid);
+defw_rc_t python_handle_event(char *rpc, char *uuid);
 
 /*
  * python_handle_connect_complete

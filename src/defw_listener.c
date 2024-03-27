@@ -40,6 +40,7 @@ static defw_rc_t process_msg_hb(char *msg, defw_agent_blk_t *agent);
 static defw_rc_t process_msg_get_num_agents(char *msg, defw_agent_blk_t *agent);
 static defw_rc_t process_msg_py_request(char *msg, defw_agent_blk_t *agent);
 static defw_rc_t process_msg_py_response(char *msg, defw_agent_blk_t *agent);
+static defw_rc_t process_msg_py_event(char *msg, defw_agent_blk_t *agent);
 static defw_rc_t process_msg_session_info(char *msg, defw_agent_blk_t *agent);
 
 static msg_process_fn_t msg_process_tbl[EN_MSG_TYPE_MAX] = {
@@ -47,6 +48,7 @@ static msg_process_fn_t msg_process_tbl[EN_MSG_TYPE_MAX] = {
 	[EN_MSG_TYPE_GET_NUM_AGENTS] = process_msg_get_num_agents,
 	[EN_MSG_TYPE_PY_REQUEST] = process_msg_py_request,
 	[EN_MSG_TYPE_PY_RESPONSE] = process_msg_py_response,
+	[EN_MSG_TYPE_PY_EVENT] = process_msg_py_event,
 	[EN_MSG_TYPE_SESSION_INFO] = process_msg_session_info,
 };
 
@@ -106,6 +108,19 @@ static defw_rc_t process_msg_py_response(char *msg, defw_agent_blk_t *agent)
 
 	agent->state |= DEFW_AGENT_WORK_IN_PROGRESS;
 	rc = python_handle_response(msg, uuid);
+	agent->state &= ~DEFW_AGENT_WORK_IN_PROGRESS;
+
+	return rc;
+}
+
+static defw_rc_t process_msg_py_event(char *msg, defw_agent_blk_t *agent)
+{
+	defw_rc_t rc;
+	char *uuid = calloc(1, UUID_STR_LEN);
+	uuid_unparse_lower(agent->id.blk_uuid, uuid);
+
+	agent->state |= DEFW_AGENT_WORK_IN_PROGRESS;
+	rc = python_handle_event(msg, uuid);
 	agent->state &= ~DEFW_AGENT_WORK_IN_PROGRESS;
 
 	return rc;

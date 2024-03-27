@@ -92,13 +92,6 @@ typedef enum defw_type {
 	EN_DEFW_INVALID,
 } defw_type_t;
 
-typedef enum defw_log_level {
-	EN_LOG_LEVEL_ERROR = 1,
-	EN_LOG_LEVEL_DEBUG,
-	EN_LOG_LEVEL_MSG,
-	EN_LOG_LEVEL_ALL,
-} defw_log_level_t;
-
 #define INTERACTIVE "interactive"
 #define BATCH "batch"
 #define DAEMON "daemon"
@@ -110,6 +103,13 @@ typedef enum defw_run_mode {
 	EN_DEFW_RUN_CMD_LINE = 4,
 	EN_DEFW_RUN_INVALID,
 } defw_run_mode_t;
+
+typedef enum defw_log_level {
+	EN_LOG_LEVEL_ERROR = 1,
+	EN_LOG_LEVEL_DEBUG,
+	EN_LOG_LEVEL_MSG,
+	EN_LOG_LEVEL_ALL,
+} defw_log_level_t;
 
 typedef void (*defw_connect_status)(defw_rc_t status, uuid_t uuid);
 
