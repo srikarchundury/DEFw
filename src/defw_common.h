@@ -111,6 +111,4 @@ typedef enum defw_log_level {
 	EN_LOG_LEVEL_ALL,
 } defw_log_level_t;
 
-typedef void (*defw_connect_status)(defw_rc_t status, uuid_t uuid);
-
 #endif /* DEFW_COMMON_H */

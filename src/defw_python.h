@@ -52,14 +52,6 @@ defw_rc_t python_run_telnet_server(void);
 defw_rc_t python_collect_agent_core(char *ip);
 
 /*
- * python_handle_[request | response]
- *   Received an RPC now execute the operation in the python interpreter
- */
-defw_rc_t python_handle_request(char *rpc, char *uuid);
-defw_rc_t python_handle_response(char *rpc, char *uuid);
-defw_rc_t python_handle_event(char *rpc, char *uuid);
-
-/*
  * python_handle_connect_complete
  *	A connection requested by python has completed
  */
@@ -70,11 +62,5 @@ defw_rc_t python_handle_connect_complete(defw_rc_t status, char *uuid);
  *	update the interactive shell environment
  */
 void python_update_interactive_shell(void);
-
-/*
- * python_refresh_agent
- *   After an agent connects trigger python to refresh its state
- */
-defw_rc_t python_refresh_agent(void);
 
 #endif /* DEFW_PYTHON_H */

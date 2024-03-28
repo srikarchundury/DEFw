@@ -14,12 +14,13 @@
 #include <signal.h>
 #include <uuid/uuid.h>
 #include "defw.h"
-#include "defw_python.h"
 #include "defw_agent.h"
 #include "defw_global.h"
 #include "libdefw_agent.h"
 #include "defw_message.h"
 #include "defw_listener.h"
+
+#define MAX_AGENT_NOTIFICATION 1024
 
 fd_set g_tAllSet;
 int g_iMaxSelectFd = INVALID_TCP_SOCKET;
@@ -28,29 +29,80 @@ static bool g_bShutdown;
 bool resmgr_connected;
 bool resmgr_connect_in_progress;
 pthread_mutex_t global_var_mutex;
+static int agent_notification_idx;
+static defw_agent_update_cb agent_notifications[MAX_AGENT_NOTIFICATION];
+static int connect_complete_idx;
+static defw_connect_status connect_notifications[MAX_AGENT_NOTIFICATION];
 
 typedef struct connection_info_s {
 	int *iNReady;
 	fd_set *tReadSet;
 } connection_info_t;
 
-typedef defw_rc_t (*msg_process_fn_t)(char *msg, defw_agent_blk_t *agent);
+// TODO: Add a callback registration for python module to use to register
+// for incoming messages
+// TODO: Consider making the message types expandable. Modules can
+// register their message type and the associated callback. If a message
+// comes with that message type then the callback is called. This will
+// make adding extra messages to be received easy. And python can have the
+// freedom to register any calls. Trick is: can python generate
+// C functions which can be called on the fly? IE in python code?
 
+static defw_rc_t process_msg_unknown(char *msg, defw_agent_blk_t *agent);
 static defw_rc_t process_msg_hb(char *msg, defw_agent_blk_t *agent);
 static defw_rc_t process_msg_get_num_agents(char *msg, defw_agent_blk_t *agent);
-static defw_rc_t process_msg_py_request(char *msg, defw_agent_blk_t *agent);
-static defw_rc_t process_msg_py_response(char *msg, defw_agent_blk_t *agent);
-static defw_rc_t process_msg_py_event(char *msg, defw_agent_blk_t *agent);
 static defw_rc_t process_msg_session_info(char *msg, defw_agent_blk_t *agent);
 
-static msg_process_fn_t msg_process_tbl[EN_MSG_TYPE_MAX] = {
+static defw_msg_process_fn_t msg_process_tbl[EN_MSG_TYPE_MAX] = {
 	[EN_MSG_TYPE_HB] = process_msg_hb,
 	[EN_MSG_TYPE_GET_NUM_AGENTS] = process_msg_get_num_agents,
-	[EN_MSG_TYPE_PY_REQUEST] = process_msg_py_request,
-	[EN_MSG_TYPE_PY_RESPONSE] = process_msg_py_response,
-	[EN_MSG_TYPE_PY_EVENT] = process_msg_py_event,
+	[EN_MSG_TYPE_PY_REQUEST] = process_msg_unknown,
+	[EN_MSG_TYPE_PY_RESPONSE] = process_msg_unknown,
+	[EN_MSG_TYPE_PY_EVENT] = process_msg_unknown,
 	[EN_MSG_TYPE_SESSION_INFO] = process_msg_session_info,
 };
+
+defw_rc_t defw_register_agent_update_notification_cb(defw_agent_update_cb cb)
+{
+	if (agent_notification_idx >= MAX_AGENT_NOTIFICATION)
+		return EN_DEFW_RC_FAIL;
+	agent_notifications[agent_notification_idx] = cb;
+	agent_notification_idx++;
+	return EN_DEFW_RC_OK;
+}
+
+defw_rc_t defw_register_msg_callback(defw_msg_type_t msg_type, defw_msg_process_fn_t cb)
+{
+	if (msg_type >= EN_MSG_TYPE_MAX || msg_type < EN_MSG_TYPE_HB)
+		return EN_DEFW_RC_FAIL;
+
+	msg_process_tbl[msg_type] = cb;
+
+	return EN_DEFW_RC_OK;
+}
+
+defw_rc_t defw_register_connect_complete(defw_connect_status cb)
+{
+	if (connect_complete_idx >= MAX_AGENT_NOTIFICATION)
+		return EN_DEFW_RC_FAIL;
+	connect_notifications[agent_notification_idx] = cb;
+	connect_complete_idx++;
+	return EN_DEFW_RC_OK;
+}
+
+void defw_agent_updated_notify(void)
+{
+	int i;
+	for (i = 0; i < agent_notification_idx; i++)
+		agent_notifications[i]();
+}
+
+void defw_notify_connect_complete(defw_rc_t status, uuid_t uuid)
+{
+	int i;
+	for (i = 0; i < connect_complete_idx; i++)
+		connect_notifications[i](status, uuid);
+}
 
 static void set_resmgr_connected(defw_rc_t status, uuid_t uuid)
 {
@@ -80,50 +132,6 @@ int defw_get_highest_fd(void)
 	PDEBUG("Current highest FD = %d", iMaxFd);
 
 	return iMaxFd;
-}
-
-static defw_rc_t process_msg_py_request(char *msg, defw_agent_blk_t *agent)
-{
-	defw_rc_t rc;
-	char *uuid = calloc(1, UUID_STR_LEN);
-	uuid_unparse_lower(agent->id.blk_uuid, uuid);
-
-	agent->state |= DEFW_AGENT_WORK_IN_PROGRESS;
-	rc = python_handle_request(msg, uuid);
-	agent->state &= ~DEFW_AGENT_WORK_IN_PROGRESS;
-
-	return rc;
-}
-
-/* An RPC reponse means the agent that there a thread waiting on the
- * response to arrive. Signal the agent that a response has arrived.
- *
- * There could be one outstanding response per agent.
- */
-static defw_rc_t process_msg_py_response(char *msg, defw_agent_blk_t *agent)
-{
-	defw_rc_t rc;
-	char *uuid = calloc(1, UUID_STR_LEN);
-	uuid_unparse_lower(agent->id.blk_uuid, uuid);
-
-	agent->state |= DEFW_AGENT_WORK_IN_PROGRESS;
-	rc = python_handle_response(msg, uuid);
-	agent->state &= ~DEFW_AGENT_WORK_IN_PROGRESS;
-
-	return rc;
-}
-
-static defw_rc_t process_msg_py_event(char *msg, defw_agent_blk_t *agent)
-{
-	defw_rc_t rc;
-	char *uuid = calloc(1, UUID_STR_LEN);
-	uuid_unparse_lower(agent->id.blk_uuid, uuid);
-
-	agent->state |= DEFW_AGENT_WORK_IN_PROGRESS;
-	rc = python_handle_event(msg, uuid);
-	agent->state &= ~DEFW_AGENT_WORK_IN_PROGRESS;
-
-	return rc;
 }
 
 static defw_rc_t process_msg_session_info(char *msg, defw_agent_blk_t *agent)
@@ -156,7 +164,7 @@ static defw_rc_t process_msg_session_info(char *msg, defw_agent_blk_t *agent)
 		 */
 		assert(agent != existing);
 		defw_release_agent_blk(agent, false);
-		python_refresh_agent();
+		defw_agent_updated_notify();
 		return EN_DEFW_RC_OK;
 	}
 
@@ -190,6 +198,12 @@ static defw_rc_t process_msg_session_info(char *msg, defw_agent_blk_t *agent)
 	return EN_DEFW_RC_OK;
 }
 
+static defw_rc_t process_msg_unknown(char *msg, defw_agent_blk_t *agent)
+{
+	PERROR("Received an unsupported message");
+	return EN_DEFW_RC_UNKNOWN_MESSAGE;
+}
+
 static defw_rc_t process_msg_hb(char *msg, defw_agent_blk_t *agent)
 {
 	defw_msg_session_t *hb = (defw_msg_session_t *)msg;
@@ -204,7 +218,7 @@ static defw_rc_t process_msg_hb(char *msg, defw_agent_blk_t *agent)
 	 */
 	if (uuid_is_null(agent->id.remote_uuid)) {
 		uuid_copy(agent->id.remote_uuid, hb->agent_id.remote_uuid);
-		python_refresh_agent();
+		defw_agent_updated_notify();
 	} else if (uuid_compare(agent->id.remote_uuid,
 				hb->agent_id.remote_uuid)) {
 		PERROR("Agent %s has changed it's uuid. Has it restarted?",
@@ -246,7 +260,7 @@ static defw_rc_t process_agent_message(defw_agent_blk_t *agent, int fd)
 	defw_rc_t rc = EN_DEFW_RC_OK;
 	defw_message_hdr_t hdr = {0};
 	char *buffer;
-	msg_process_fn_t proc_fn;
+	defw_msg_process_fn_t proc_fn;
 	int cmp;
 
 	/* get the header first */
@@ -295,8 +309,12 @@ static defw_rc_t process_agent_message(defw_agent_blk_t *agent, int fd)
 
 	/* call the appropriate processing function */
 	proc_fn = msg_process_tbl[hdr.type];
-	if (proc_fn)
+	if (proc_fn) {
 		rc = proc_fn(buffer, agent);
+	} else {
+		free(buffer);
+		return EN_DEFW_RC_UNKNOWN_MESSAGE;
+	}
 
 	if (rc != EN_DEFW_RC_KEEP_DATA)
 		free(buffer);

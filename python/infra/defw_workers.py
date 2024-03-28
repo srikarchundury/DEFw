@@ -3,7 +3,7 @@ import defw_common_def as common
 from cdefw_global import *
 from defw_exception import DEFwCommError, DEFwError, DEFwInternalError
 from cdefw_agent import defw_send_req, defw_send_rsp, defw_connect_to_service, \
-			defw_connect_to_client, defw_py_connect_status
+			defw_connect_to_client
 from defw import client_agents, service_agents, \
 				active_client_agents, active_service_agents, \
 				me, preferences, service_apis

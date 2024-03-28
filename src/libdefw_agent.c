@@ -226,7 +226,7 @@ static void close_agent_connection_unlocked(defw_agent_blk_t *agent)
 		agent->iRpcFd = -1;
 	}
 
-	python_refresh_agent();
+	defw_agent_updated_notify();
 }
 
 static void close_agent_connection(defw_agent_blk_t *agent)
@@ -898,7 +898,7 @@ defw_rc_t defw_connect_to_service(char *ip_addr, int port, char *name,
 {
 	/* TODO we need a better way of doing this. For now I don't know
 	 * how to handle function pointer passing in swig */
-	defw_connect_status cb = (status_cb) ? status_cb : defw_py_connect_status;
+	defw_connect_status cb = (status_cb) ? status_cb : defw_notify_connect_complete;
 	return defw_connect_to_agent(ip_addr, port, name, hostname,
 				    type, uuid, &agent_active_service_list, cb);
 }
@@ -909,21 +909,9 @@ defw_rc_t defw_connect_to_client(char *ip_addr, int port, char *name,
 {
 	/* TODO we need a better way of doing this. For now I don't know
 	 * how to handle function pointer passing in swig */
-	defw_connect_status cb = (status_cb) ? status_cb : defw_py_connect_status;
+	defw_connect_status cb = (status_cb) ? status_cb : defw_notify_connect_complete;
 	return defw_connect_to_agent(ip_addr, port, name, hostname,
 				   type, uuid, &agent_active_client_list, cb);
-}
-
-void defw_py_connect_status(defw_rc_t status, uuid_t uuid)
-{
-	defw_rc_t rc;
-	char *uuid_str = calloc(1, UUID_STR_LEN);
-
-	uuid_unparse(uuid, uuid_str);
-
-	rc = python_handle_connect_complete(status, uuid_str);
-	if (rc)
-		PERROR("Python connect request failed: %s", defw_rc2str(rc));
 }
 
 static defw_rc_t

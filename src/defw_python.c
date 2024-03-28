@@ -4,13 +4,27 @@
 #include "defw.h"
 #include "defw_python.h"
 #include "defw_listener.h"
+#include "defw_global.h"
 
 extern defw_config_params_t g_defw_cfg;
 static PyObject *g_interactive_shell;
 static pthread_mutex_t g_interactive_shell_mutex;
 static atomic_long g_py_gil_refcount;
 
-#define RUN_PYTHON_CMD(cmd) {\
+/*
+ * python_handle_[request | response]
+ *   Received an RPC now execute the operation in the python interpreter
+ */
+defw_rc_t python_handle_request(char *rpc, char *uuid);
+defw_rc_t python_handle_response(char *rpc, char *uuid);
+defw_rc_t python_handle_event(char *rpc, char *uuid);
+/*
+ * python_refresh_agent
+ *   After an agent connects trigger python to refresh its state
+ */
+defw_rc_t python_refresh_agent(void);
+
+#define RUN_PYTHON_CMD(cmd) {						\
 	int py_rc;							\
 	py_rc = PyRun_SimpleString(cmd);				\
 	if (py_rc) {							\
@@ -237,6 +251,62 @@ defw_rc_t python_run_cmd_line(int argc, char *argv[], char *module, char *cmd)
 	return EN_DEFW_RC_OK;
 }
 
+static defw_rc_t process_msg_py_request(char *msg, defw_agent_blk_t *agent)
+{
+	defw_rc_t rc;
+	char *uuid = calloc(1, UUID_STR_LEN);
+	uuid_unparse_lower(agent->id.blk_uuid, uuid);
+
+	agent->state |= DEFW_AGENT_WORK_IN_PROGRESS;
+	rc = python_handle_request(msg, uuid);
+	agent->state &= ~DEFW_AGENT_WORK_IN_PROGRESS;
+
+	return rc;
+}
+
+/* An RPC reponse means the agent that there a thread waiting on the
+ * response to arrive. Signal the agent that a response has arrived.
+ *
+ * There could be one outstanding response per agent.
+ */
+static defw_rc_t process_msg_py_response(char *msg, defw_agent_blk_t *agent)
+{
+	defw_rc_t rc;
+	char *uuid = calloc(1, UUID_STR_LEN);
+	uuid_unparse_lower(agent->id.blk_uuid, uuid);
+
+	agent->state |= DEFW_AGENT_WORK_IN_PROGRESS;
+	rc = python_handle_response(msg, uuid);
+	agent->state &= ~DEFW_AGENT_WORK_IN_PROGRESS;
+
+	return rc;
+}
+
+static defw_rc_t process_msg_py_event(char *msg, defw_agent_blk_t *agent)
+{
+	defw_rc_t rc;
+	char *uuid = calloc(1, UUID_STR_LEN);
+	uuid_unparse_lower(agent->id.blk_uuid, uuid);
+
+	agent->state |= DEFW_AGENT_WORK_IN_PROGRESS;
+	rc = python_handle_event(msg, uuid);
+	agent->state &= ~DEFW_AGENT_WORK_IN_PROGRESS;
+
+	return rc;
+}
+
+static void py_connect_status(defw_rc_t status, uuid_t uuid)
+{
+	defw_rc_t rc;
+	char *uuid_str = calloc(1, UUID_STR_LEN);
+
+	uuid_unparse(uuid, uuid_str);
+
+	rc = python_handle_connect_complete(status, uuid_str);
+	if (rc)
+		PERROR("Python connect request failed: %s", defw_rc2str(rc));
+}
+
 /*
  * gcc py.c -o py -I/usr/local/include/python2.7
  * -L/usr/local/lib/python2.7/config -lm -ldl -lpthread -lutil -lpython2.7
@@ -244,6 +314,13 @@ defw_rc_t python_run_cmd_line(int argc, char *argv[], char *module, char *cmd)
 defw_rc_t python_init(void)
 {
 	wchar_t program[5];
+
+	/* register with listener */
+	defw_register_msg_callback(EN_MSG_TYPE_PY_REQUEST, process_msg_py_request);
+	defw_register_msg_callback(EN_MSG_TYPE_PY_RESPONSE, process_msg_py_response);
+	defw_register_msg_callback(EN_MSG_TYPE_PY_EVENT, process_msg_py_event);
+	defw_register_agent_update_notification_cb(python_refresh_agent);
+	defw_register_connect_complete(py_connect_status);
 
 	pthread_mutex_init(&g_interactive_shell_mutex, NULL);
 	atomic_init(&g_py_gil_refcount, 0);

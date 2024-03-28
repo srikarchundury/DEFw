@@ -22,6 +22,9 @@ struct dlist_entry {
 };
 #endif
 
+typedef defw_rc_t (*defw_agent_update_cb)(void);
+typedef void (*defw_connect_status)(defw_rc_t status, uuid_t uuid);
+
 typedef struct defw_agent_blk_s {
 	struct dlist_entry entry;
 	pthread_mutex_t state_mutex;
@@ -141,13 +144,6 @@ defw_rc_t defw_connect_to_service(char *ip_addr, int port, char *name,
 defw_rc_t defw_connect_to_client(char *ip_addr, int port, char *name,
 				char *hostname, defw_type_t type,
 				char *uuid, defw_connect_status status_cb);
-
-/*
- * defw_py_connect_status
- *	A callback function used by python to feed an event back to
- *	a python thread waiting for connect status
- */
-void defw_py_connect_status(defw_rc_t status, uuid_t uuid);
 
 /*
  * defw_get_agent_uuid
