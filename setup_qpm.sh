@@ -1,11 +1,11 @@
 export DEFW_PATH=/sw/frontier/qhpc/QFw/DEFw
 export DEFW_CONFIG_PATH=$DEFW_PATH/python/config/defw_generic.yaml
-export LD_LIBRARY_PATH=$DEFW_PATH/src/
+export LD_LIBRARY_PATH=$DEFW_PATH/src/:$LD_LIBRARY_PATH
 export DEFW_AGENT_NAME=qpm
 export DEFW_LISTEN_PORT=8095
 export DEFW_AGENT_TYPE=service
 export DEFW_PARENT_ADDR=10.129.3.9
-export DEFW_PARENT_HOSTNAME=$SLURMD_NODENAME
+export DEFW_PARENT_HOSTNAME=login1
 #export DEFW_PARENT_ADDR=127.0.0.1
 export DEFW_PARENT_PORT=8090
 export DEFW_PARENT_NAME=resmgr
