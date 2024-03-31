@@ -65,15 +65,10 @@ def install(env, src, dst):
     #os.system(cmd)
     return
 
-def build_bin(env, daemon):
-    if (daemon):
-        binary = env['DEFW_MAIN_DAEMON_C']
-        path = os.path.join(env['DEFW_PATH'], "src", "defwd")
-        print("Building Daemon")
-    else:
-        binary = env['DEFW_MAIN_C']
-        path = os.path.join(env['DEFW_PATH'], "src", "defwp")
-        print("Building standard bin")
+def build_bin(env):
+    binary = env['DEFW_MAIN_C']
+    path = os.path.join(env['DEFW_PATH'], "src", "defwp")
+    print("Building standard bin")
 
     cmd = env['CC'] + " " + env['SWIG_COMP_FLAGS'] + \
             " -I" + env['PYTHON_INCLUDE_DIR'] + " " + \
@@ -110,7 +105,6 @@ env['PYTHON_INCLUDE_DIR'] = sysconfig.get_config_var('INCLUDEPY')
 env['PYTHON_LIB_DIR'] = sysconfig.get_config_var('LIBDIR')
 env['PYTHON_LIB'] = os.path.splitext(sysconfig.get_config_var('LDLIBRARY').strip('lib'))[0]
 env['DEFW_MAIN_C'] = os.path.join(DEFW_PATH, 'src', 'defw.c')
-env['DEFW_MAIN_DAEMON_C'] = os.path.join(DEFW_PATH, 'src', 'defwd.c')
 
 env.AddMethod(generate_swig_intf)
 env.AddMethod(swigify)
@@ -125,8 +119,7 @@ env.clean_all = env.clean()
 env.shared_libs = env.build_shared_library()
 env.swigify_files = env.swigify_all_files()
 env.fwsl = env.mbuild_shared_library(env['DEFW_FWSL_FILES'], os.path.join(env['DEFW_PATH'], "src", "libfwsl.so"))
-env.bin = env.build_bin(False)
-env.bin = env.build_bin(True)
+env.bin = env.build_bin()
 env.install_defw = env.install(os.path.join(env['DEFW_PATH'], "src"),
                               os.path.join(env['DEFW_PATH'], "install"))
 
