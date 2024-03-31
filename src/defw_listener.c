@@ -85,7 +85,7 @@ defw_rc_t defw_register_connect_complete(defw_connect_status cb)
 {
 	if (connect_complete_idx >= MAX_AGENT_NOTIFICATION)
 		return EN_DEFW_RC_FAIL;
-	connect_notifications[agent_notification_idx] = cb;
+	connect_notifications[connect_complete_idx] = cb;
 	connect_complete_idx++;
 	return EN_DEFW_RC_OK;
 }
