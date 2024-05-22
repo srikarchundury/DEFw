@@ -141,9 +141,12 @@ def start_qrcs(num_qrc, host_list):
 					found_launchers.insert(0, {k:r})
 				else:
 					found_launchers.append({k:r})
-		if len(found_hosts) != len_host_list:
+		#if len(found_hosts) != len_host_list:
+		# wait for only one launcher
+		if len(found_hosts) != 1:
 			logging.debug("Waiting to connect to launcher. " \
-				f"Got {len(found_hosts)}, expecting {len_host_list}")
+				f"Got {len(found_hosts)}, expecting 1")
+				#f"Got {len(found_hosts)}, expecting {len_host_list}")
 			sleep(1)
 		else:
 			complete = True
