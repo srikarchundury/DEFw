@@ -244,8 +244,14 @@ class QRC:
 			  f'--np {info["np"]} --host {hosts} {gpuwrapper} -v {circuit_runner} ' \
 			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]} ' \
 			  f'-c {compiler}'
+#		cmd = f'{exec_cmd} --dvm {dvm} -x LD_LIBRARY_PATH ' \
+#			  f'--mca btl ^tcp,ofi,vader,openib --pmixmca pmix_client_spawn_verbose 100 ' \
+#			  f'--mca pml ^ucx --mca mtl ofi --mca opal_common_ofi_provider_include '\
+#			  f'{info["provider"]} --map-by {info["mapping"]} --bind-to core  '\
+#			  f'--np {info["np"]} --host {hosts} /ccs/home/shehataa/mysleep.sh '
 #			  f'-c {compiler} 2>&1 | tee {output_file}'
-
+#--display mapping,bindings
+# --prtemca ras_base_verbose 50
 		return cmd
 
 	def run_circuit(self, cid):
@@ -275,9 +281,10 @@ class QRC:
 		logging.debug(f"Running -- {cmd}")
 
 		try:
-			env = {'FI_LOG_LEVEL': 'info'}
-			output, error, rc = launcher.launch(cmd, env=env, wait=True)
-			logging.debug(f"COMMAND returned {rc}")
+			#env = {'FI_LOG_LEVEL': 'info'}
+			#output, error, rc = launcher.launch(cmd, env=env, wait=True)
+			output, error, rc = launcher.launch(cmd, wait=True)
+			logging.debug(f"Completed -- {cmd} -- returned {rc} -- {output} -- {error}")
 		except Exception as e:
 			os.remove(qasm_file)
 			logging.critical(f"Failed to launch {cmd}")
