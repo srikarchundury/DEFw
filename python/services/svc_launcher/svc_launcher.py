@@ -1,7 +1,7 @@
 from defw_agent_info import *
 from defw_util import prformat, fg, bg
 from defw import me
-import os, subprocess, copy, yaml, logging, sys, threading, socket
+import os, subprocess, copy, yaml, logging, sys, threading, socket, psutil
 from time import sleep
 from defw_exception import DEFwError, DEFwInProgress
 sys.path.append(os.path.split(os.path.abspath(__file__))[0])
@@ -21,6 +21,12 @@ class Process:
 		if env and type(env) == dict:
 			for k, v in env.items():
 				self.__env[k] = v
+
+	def __str__(self):
+		return f"Process(pid={self.__pid}, {self.__process}, env={self.__appended_env})"
+
+	def __repr__(self):
+		return f"Process(pid={self.__pid}, {self.__process}, env={self.__appended_env})"
 
 	def launch(self):
 		cmd = " ".join(self.__cmd)
@@ -81,21 +87,21 @@ class Launcher:
 		self.__monitor_thr.start()
 
 	def monitor_thr(self):
-		# TODO: If a process dies while it's doing work the user of the
-		# process needs to detect that it's no longer there and abort
-		# operations. Currently that'll rely on a timeout, which could be
-		# pretty long
+		logging.debug("Starting up monitor_thr2")
 		while not common.shutdown:
 			for pid, proc in self.__proc_dict.items():
-				if proc.poll():
-					logging.debug(f"{pid} died unexpectedly with rc {proc.returncode()}")
+				exists = psutil.pid_exists(pid)
+				logging.debug(f"Examining -- {pid}:{proc}:{exists}:{proc.poll()}")
+				if proc.poll() is not None:
+					logging.debug(f"{pid} terminated with rc {proc.returncode()}")
+					stdout, stderr, rc = proc.get_result()
 					proc.kill()
-					self.__dead_procs[pid] = proc.returncode()
+					self.__dead_procs[pid] = (stdout, stderr, rc)
 			for pid in self.__dead_procs.keys():
 				if pid in self.__proc_dict.keys():
 					del self.__proc_dict[pid]
 			sleep(1)
-		logging.debug("Monitor thread shutdown")
+		logging.debug("Monitor thread 2 shutdown")
 
 	def compose_remote_cmd(self, exe, env, use, modules, python_env):
 		# Start the DVM on the second node in the Simulation Environment
@@ -146,12 +152,10 @@ class Launcher:
 			del self.__proc_dict[pid]
 
 	def status(self, pid):
-		if pid in self.__dead_procs.key():
+		if pid in self.__dead_procs.keys():
 			rc = self.__dead_procs[pid]
 			del self.__dead_procs[pid]
 			return rc
-		if pid in self.__proc_dic.keys():
-			return 0
 		raise DEFwInProgress(f"{pid} is still running")
 
 	def shutdown(self, keep=False):

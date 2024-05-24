@@ -3,7 +3,7 @@ from defw_util import prformat, fg, bg
 from defw import me
 import logging, uuid, time, queue, threading, sys, os, io, contextlib
 import importlib, yaml
-from defw_exception import DEFwError, DEFwExists, DEFwExecutionError
+from defw_exception import DEFwError, DEFwExists, DEFwExecutionError, DEFwInProgress, DEFwOutOfResources
 import svc_launcher, cdefw_global
 
 CID_COUNTER = 0
@@ -79,7 +79,10 @@ def suppress_prints():
 	sys.stderr = original_stderr
 
 class QRC:
+	# number of worker threads started
 	MAX_NUM_WORKERS = 8
+	# max work queue size
+	MAX_NUM_WORKER_TASKS = 256
 	THREAD_STATE_FREE = 0
 	THREAD_STATE_BUSY = 1
 
@@ -99,6 +102,7 @@ class QRC:
 					runner = threading.Thread(target=self.runner, args=(x,))
 					logging.debug(f"inserting {x} in the worker pool")
 					self.worker_pool[x] = {'thread': runner,
+										   'active_tasks': [],
 										   'queue': queue.Queue(),
 										   'state': QRC.THREAD_STATE_FREE}
 					runner.start()
@@ -122,7 +126,96 @@ class QRC:
 			except:
 				continue
 
+	def check_active_tasks(self, wid):
+		complete = []
+		for task_info in self.worker_pool[wid]['active_tasks']:
+			try:
+				stdout, stderr, rc = task_info['launcher'].status(task_info['pid'])
+			except DEFwInProgress:
+				logging.debug(f"{task_info} still in progress")
+				continue
+			except Exception as e:
+				raise e
+			logging.debug(f"{task_info} completed")
+			complete.append(task_info)
+			cid = task_info['cid']
+			circ = self.circuits[cid]
+			qasm_file = task_info['qasm_file']
+			if not rc:
+				logging.debug(f"Circuit {cid} successful")
+				try:
+					output_file = qasm_file+".result.r0"
+					with open(output_file, 'r') as f:
+						output = f.read()
+						output = yaml.safe_load(output)
+					os.remove(output_file)
+					self.circuits[cid].set_done()
+				except Exception as e:
+					output = "{result: missing, exception: "+ f"{e}" + "}"
+					circ.set_fail()
+			else:
+				stdout = stdout.decode('utf-8')
+				stderr = stderr.decode('utf-8')
+				res = stdout + '\n' + stderr
+				output = "{result: "+ f"{res}" + "}"
+				circ.set_fail()
+
+			try:
+				os.remove(qasm_file)
+			except:
+				pass
+
+			r = {'cid': cid, 'result': output, 'rc': rc}
+			with self.circuit_results_lock:
+				self.circuit_results.append(r)
+
+		for task_info in complete:
+			self.worker_pool[wid]['active_tasks'].remove(task_info)
+
 	def runner(self, my_id):
+		# get the next available entry on the queue
+		# if one is available run it
+		# check on currently running tasks to see if any of them complete
+		# Add completed tasks to the results dictionary
+		with self.worker_pool_lock:
+			if my_id not in self.worker_pool:
+				logging.debug(f"{my_id}: A worker thread is not part of the pool")
+			my_queue = self.worker_pool[my_id]['queue']
+		logging.debug(f"starting QRC main loop for {my_id}")
+		while not self.runner_shutdown:
+			empty = False
+			try:
+				cid = my_queue.get(timeout=1)
+				if cid == -1:
+					self.runner_shutdown = True
+					continue
+			except queue.Empty:
+				empty = True
+
+			self.check_active_tasks(my_id)
+
+			if not empty:
+				result = None
+				pid = -1
+				try:
+					task_info = self.run_circuit_async(cid)
+				except Exception as e:
+					result = e
+					rc = -1
+					pass
+				if my_queue.qsize() < QRC.MAX_NUM_WORKER_TASKS:
+					with self.worker_pool_lock:
+						self.worker_pool[my_id]['state'] = QRC.THREAD_STATE_FREE
+				if result:
+					r = {'cid': cid, 'result': result, 'rc': rc}
+					logging.debug(f"Problem with circuit {cid} appending result {r}")
+					with self.circuit_results_lock:
+						self.circuit_results.append(r)
+						logging.debug(f"{len(self.circuit_results)} pending results")
+				else:
+					self.worker_pool[my_id]['active_tasks'].append(task_info)
+
+	def runner_sync(self, my_id):
 		with self.worker_pool_lock:
 			if my_id not in self.worker_pool:
 				logging.debug(f"{my_id}: A worker thread is not part of the pool")
@@ -237,6 +330,7 @@ class QRC:
 #		cmd = f'{circuit_runner} ' \
 #			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]} ' \
 #			  f'-c {compiler} -v'
+
 		cmd = f'{exec_cmd} --dvm {dvm} -x LD_LIBRARY_PATH ' \
 			  f'--mca btl ^tcp,ofi,vader,openib ' \
 			  f'--mca pml ^ucx --mca mtl ofi --mca opal_common_ofi_provider_include '\
@@ -244,15 +338,60 @@ class QRC:
 			  f'--np {info["np"]} --host {hosts} {gpuwrapper} -v {circuit_runner} ' \
 			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]} ' \
 			  f'-c {compiler}'
+
 #		cmd = f'{exec_cmd} --dvm {dvm} -x LD_LIBRARY_PATH ' \
 #			  f'--mca btl ^tcp,ofi,vader,openib --pmixmca pmix_client_spawn_verbose 100 ' \
 #			  f'--mca pml ^ucx --mca mtl ofi --mca opal_common_ofi_provider_include '\
 #			  f'{info["provider"]} --map-by {info["mapping"]} --bind-to core  '\
 #			  f'--np {info["np"]} --host {hosts} /ccs/home/shehataa/mysleep.sh '
+
 #			  f'-c {compiler} 2>&1 | tee {output_file}'
 #--display mapping,bindings
 # --prtemca ras_base_verbose 50
 		return cmd
+
+	def run_circuit_async(self, cid):
+		# check that we can run on CXI
+		if "SLINGSHOT_VNIS" in os.environ:
+			logging.debug(f"Found SLINGSHOT_VNIS: {os.environ['SLINGSHOT_VNIS']}")
+		else:
+			logging.critical(f"Didn't find SLINGSHOT_VNIS")
+
+		circ = self.circuits[cid]
+
+		#self.load_modules(circ.info["modules"])
+
+		tmp_dir = cdefw_global.get_defw_tmp_dir()
+
+		qasm_c = circ.info["qasm"]
+		qasm_file = os.path.join(tmp_dir, str(cid)+".qasm")
+		logging.debug(f"Writing circuit file to {qasm_file}")
+		with open(qasm_file, 'w') as f:
+			f.write(qasm_c)
+
+		circ.set_running()
+		launcher = svc_launcher.Launcher()
+		logging.debug(f"Running Circuit --\n{qasm_c}")
+		cmd = self.form_cmd(circ, qasm_file)
+
+		task_info = {}
+		pid = -1
+		try:
+			#env = {'FI_LOG_LEVEL': 'info'}
+			#output, error, rc = launcher.launch(cmd, env=env, wait=True)
+			pid = launcher.launch(cmd)
+			logging.debug(f"Running -- {cmd} -- with pid {pid}")
+		except Exception as e:
+			os.remove(qasm_file)
+			logging.critical(f"Failed to launch {cmd}")
+			raise e
+
+		task_info['cid'] = cid
+		task_info['qasm_file'] = qasm_file
+		task_info['launcher'] = launcher
+		task_info['pid'] = pid
+
+		return task_info
 
 	def run_circuit(self, cid):
 		# check that we can run on CXI
@@ -273,7 +412,6 @@ class QRC:
 		with open(qasm_file, 'w') as f:
 			f.write(qasm_c)
 
-		retries = 0
 		circ.set_running()
 		launcher = svc_launcher.Launcher()
 		logging.debug(f"Running Circuit --\n{qasm_c}")
@@ -317,6 +455,19 @@ class QRC:
 		return self.run_circuit(cid)
 
 	def async_run(self, cid, info):
+		self.create_circuit(cid, info)
+		with self.worker_pool_lock:
+			for k, v in self.worker_pool.items():
+				if v['state'] == QRC.THREAD_STATE_FREE and \
+				   v['queue'].qsize() < QRC.MAX_NUM_WORKER_TASKS:
+					v['queue'].put(cid)
+					if v['queue'].qsize() >= QRC.MAX_NUM_WORKER_TASKS:
+						v['state'] = QRC.THREAD_STATE_BUSY
+					return cid
+				elif v['state'] == QRC.THREAD_STATE_BUSY:
+					raise DEFwOutOfResources(f"No more resource to run {cid}")
+
+	def async_run_old(self, cid, info):
 		self.create_circuit(cid, info)
 		with self.worker_pool_lock:
 			for k, v in self.worker_pool.items():
