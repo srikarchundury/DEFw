@@ -202,8 +202,19 @@ class DEFwAgents:
 		self.reload()
 		return list(self.agent_dict.values())
 
+	def get_agent(self, endpoint):
+		self.reload()
+		for name, agent in self.agent_dict.items():
+			ag_ep = agent.get_ep()
+			if ag_ep == endpoint:
+				return agent
+		return None
+
 	def connect(self, endpoint):
 		import defw_workers
+		# if the agent is already in our data base we don't need to connect to it again
+		if self.get_agent(endpoint):
+			return
 		wr = defw_workers.WorkerRequest(defw_workers.WorkerRequest.WR_CONNECT,
 									   remote_uuid=endpoint.remote_uuid,
 									   ep=endpoint)
