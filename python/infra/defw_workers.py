@@ -42,19 +42,23 @@ class WorkerEvent:
 			   raise DEFwError(f"Bad WorkerEvent type {we_type}")
 
 	def type2str(self, we):
-		if WorkerEvent.EVENT_INCOMING_REQUEST:
-			return 'EVENT_INCOMING_REQUEST'
-		if WorkerEvent.EVENT_INCOMING_RESPONSE:
-			return 'EVENT_INCOMING_RESPONSE'
-		if WorkerEvent.EVENT_CONN_COMPLETE:
-			return 'EVENT_CONN_COMPLETE'
-		if WorkerEvent.EVENT_REFRESH:
-			return 'EVENT_REFRESH'
-		if WorkerEvent.EVENT_REFRESH_COMPLETE:
-			return 'EVENT_REFRESH_COMPLETE'
-		if WorkerEvent.EVENT_SHUTDOWN:
-			return 'EVENT_SHUTDOWN'
-		return "UNKNOWN_WORKEREVENT"
+		events = []
+		for e in we:
+			if e == WorkerEvent.EVENT_INCOMING_REQUEST:
+				events.append('EVENT_INCOMING_REQUEST')
+			elif e == WorkerEvent.EVENT_INCOMING_RESPONSE:
+				events.append('EVENT_INCOMING_RESPONSE')
+			elif e == WorkerEvent.EVENT_CONN_COMPLETE:
+				events.append('EVENT_CONN_COMPLETE')
+			elif e == WorkerEvent.EVENT_REFRESH:
+				events.append('EVENT_REFRESH')
+			elif e == WorkerEvent.EVENT_REFRESH_COMPLETE:
+				events.append('EVENT_REFRESH_COMPLETE')
+			elif e == WorkerEvent.EVENT_SHUTDOWN:
+				events.append('EVENT_SHUTDOWN')
+			else:
+				events.append("UNKNOWN_WORKEREVENT")
+		return ",".join(events)
 
 class WorkerRequest:
 	WR_SEND_MSG = 1
@@ -123,8 +127,9 @@ class WorkerRequest:
 			logging.debug(f"cur time {str(t)}, deadline {str(self.deadline)}")
 			if event:
 				logging.debug(f"Completed {self.type2str(self.wr_type)} " \
-							  f"ev: {event.type2str(event.ev_type)} " \
-							  f"WorkRequest {self.req_uuid} exp {self.expected_events}")
+							  f"ev: {event.type2str([event.ev_type])} " \
+							  f"WorkRequest {self.req_uuid} exp " \
+							  f"{event.type2str(self.expected_events)}")
 				if event.ev_type == WorkerEvent.EVENT_CONN_COMPLETE:
 					with self.expected_events_lock:
 						ev = self.expected_events[0]
@@ -137,7 +142,7 @@ class WorkerRequest:
 							raise DEFwCommError("Expected to wait for a REFRESH COMPLETE")
 					else:
 						raise DEFwCommError(f"expected REFRESH_COMPLETE got " \
-								f"event.type2str({event.ev_type})")
+								f"{event.type2str([event.ev_type])}")
 				elif event.ev_type == WorkerEvent.EVENT_REFRESH_COMPLETE:
 					with self.expected_events_lock:
 						if len(self.expected_events) > 0:
@@ -216,7 +221,7 @@ class WorkerThread:
 			except queue.Empty:
 				continue
 
-			logging.debug(f"Received event {we.type2str(we.ev_type)}")
+			logging.debug(f"Received event {we.type2str([we.ev_type])}")
 
 			if we.ev_type == WorkerEvent.EVENT_INCOMING_REQUEST:
 				logging.debug(f"handling request {we.msg_yaml}")
