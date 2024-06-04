@@ -211,6 +211,7 @@ class QPM:
 		cid = str(uuid.uuid4())
 		self.circuits[cid] = Circuit(cid, info)
 		self.circuits[cid].set_ready()
+		logging.debug(f"{cid} added to circuit database")
 		return cid
 
 	def delete_circuit(self, cid):
@@ -235,13 +236,13 @@ class QPM:
 		# determine if we have enough hosts to run this circuit
 		# If the number of hosts required is more than the total number
 		# of hosts then we can't run the circuit.
+		logging.debug(f"Available resources = {self.free_hosts}")
 		if num_hosts > len(self.free_hosts.keys()):
 			raise DEFwOutOfResources("Not enough nodes to run simulation")
 
 		tmp_resources = {}
 		consumed_res = {}
 		itrnp = 0
-		logging.debug(f"Available resources = {self.free_hosts}")
 		for host in self.free_hosts.keys():
 			if np == 0:
 				break;
@@ -280,7 +281,9 @@ class QPM:
 		if circ.assigned_qrc:
 			circ.assigned_qrc.load -= 1
 		circ.set_done()
-		self.delete_circuit(circ.get_cid())
+		cid = circ.get_cid()
+		logging.debug(f"Deleting circuit {cid}")
+		self.delete_circuit(cid)
 
 	def common_run(self, cid):
 		self.read_all_qrc_cqs()
@@ -326,8 +329,12 @@ class QPM:
 			while (res := qrc.instance.read_cq()):
 				qrc.circuit_results.append(res)
 				logging.debug(f"{qrc.name} has {len(qrc.circuit_results)} pending results")
-				circ = self.circuits[res['cid']]
-				self.free_resources(circ)
+				try:
+					circ = self.circuits[res['cid']]
+					self.free_resources(circ)
+				except Exception as e:
+					logging.debug(f"couldn't find cid: {res['cid']} in {self.circuits}")
+					raise e
 
 	def read_cq(self, cid=None):
 		if not common.g_qpm_initialized:
