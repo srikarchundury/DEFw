@@ -2,9 +2,10 @@ from defw_agent_info import *
 from defw_util import prformat, fg, bg
 from defw import me
 import logging, uuid, time, queue, threading, sys, os, io, contextlib
-import importlib, yaml
+import importlib, yaml, copy, subprocess, traceback
 from defw_exception import DEFwError, DEFwExists, DEFwExecutionError, DEFwInProgress, DEFwOutOfResources
 import svc_launcher, cdefw_global
+#from defw_proc import Process
 
 CID_COUNTER = 0
 QCR_VERBOSE = 1
@@ -331,19 +332,24 @@ class QRC:
 #			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]} ' \
 #			  f'-c {compiler} -v'
 
+#		cmd = f'{exec_cmd} --dvm {dvm} -x LD_LIBRARY_PATH ' \
+#			  f'--mca btl ^tcp,ofi,vader,openib ' \
+#			  f'--mca pml ^ucx --mca mtl ofi --mca opal_common_ofi_provider_include '\
+#			  f'{info["provider"]} --map-by {info["mapping"]} --bind-to core '\
+#			  f'--np {info["np"]} --host {hosts} {gpuwrapper} -v {circuit_runner} ' \
+#			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]} ' \
+#			  f'-c {compiler}'
+
 		cmd = f'{exec_cmd} --dvm {dvm} -x LD_LIBRARY_PATH ' \
-			  f'--mca btl ^tcp,ofi,vader,openib ' \
-			  f'--mca pml ^ucx --mca mtl ofi --mca opal_common_ofi_provider_include '\
-			  f'{info["provider"]} --map-by {info["mapping"]} --bind-to core '\
-			  f'--np {info["np"]} --host {hosts} {gpuwrapper} -v {circuit_runner} ' \
-			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]} ' \
-			  f'-c {compiler}'
+			  f'--report-bindings --display-map --display-allocation --np 1 /ccs/home/shehataa/mysleep.sh '
 
 #		cmd = f'{exec_cmd} --dvm {dvm} -x LD_LIBRARY_PATH ' \
 #			  f'--mca btl ^tcp,ofi,vader,openib --pmixmca pmix_client_spawn_verbose 100 ' \
 #			  f'--mca pml ^ucx --mca mtl ofi --mca opal_common_ofi_provider_include '\
 #			  f'{info["provider"]} --map-by {info["mapping"]} --bind-to core  '\
 #			  f'--np {info["np"]} --host {hosts} /ccs/home/shehataa/mysleep.sh '
+
+#		cmd = '/ccs/home/shehataa/mysleep.sh'
 
 #			  f'-c {compiler} 2>&1 | tee {output_file}'
 #--display mapping,bindings
@@ -393,6 +399,15 @@ class QRC:
 
 		return task_info
 
+#	def run_cmd(self, cmd):
+#		proc = Process(cmd, None, "")
+#		pid = proc.launch()
+#		stdout, stderr, rc = proc.get_result()
+#		proc.terminate()
+#		#rc = proc.run()
+#		return stdout, stderr, rc
+#		#return "out", "err", rc
+
 	def run_circuit(self, cid):
 		# check that we can run on CXI
 		if "SLINGSHOT_VNIS" in os.environ:
@@ -413,7 +428,7 @@ class QRC:
 			f.write(qasm_c)
 
 		circ.set_running()
-		launcher = svc_launcher.Launcher()
+		#launcher = svc_launcher.Launcher()
 		logging.debug(f"Running Circuit --\n{qasm_c}")
 		cmd = self.form_cmd(circ, qasm_file)
 		logging.debug(f"Running -- {cmd}")
@@ -422,12 +437,16 @@ class QRC:
 			#env = {'FI_LOG_LEVEL': 'info'}
 			#output, error, rc = launcher.launch(cmd, env=env, wait=True)
 			output, error, rc = launcher.launch(cmd, wait=True)
+			#output, error, rc = self.run_cmd(cmd)
 			logging.debug(f"Completed -- {cmd} -- returned {rc} -- {output} -- {error}")
 		except Exception as e:
 			os.remove(qasm_file)
 			logging.critical(f"Failed to launch {cmd}")
+			logging.critical(f"encountered exception {e}")
+			#launcher.shutdown()
 			raise e
 
+		#launcher.shutdown()
 		logging.debug(f"Removing {qasm_file}")
 		os.remove(qasm_file)
 

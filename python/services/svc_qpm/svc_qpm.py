@@ -4,6 +4,7 @@ from defw import me
 import logging, uuid, time, queue, threading, logging, yaml
 from defw_exception import DEFwError, DEFwNotReady, DEFwInProgress
 import sys, os, re, math
+from defw_proc import Process
 
 sys.path.append(os.path.split(os.path.abspath(__file__))[0])
 import qpm_common as common
@@ -292,12 +293,33 @@ class QPM:
 		logging.debug(f"Running {cid}\n{circuit.info}")
 		return circuit
 
+	def run_cmd(self, cmd):
+		proc = Process(cmd, None, "")
+		pid = proc.launch()
+		stdout, stderr, rc = proc.get_result()
+		time.sleep(2)
+		#proc.terminate()
+		#rc = proc.run()
+		return stdout, stderr, rc
+		#return "out", "err", rc
+
+
 	def sync_run(self, cid):
+		#cmd = "/sw/frontier/ums/ums024/cce/15.0.0/install/openmpi-5.0.1-ompix-a4-20240320.debug/bin/prterun --dvm file:/ccs/home/shehataa/QFwTmp/prte_dvm/dvm-uri -x LD_LIBRARY_PATH --report-bindings --display-map --display-allocation --np 1 /ccs/home/shehataa/mysleep.sh"
+		cmd = "/sw/frontier/ums/ums024/cce/15.0.0/install/openmpi-5.0.1-ompix-a4-20240320.debug/bin/mpirun --dvm file:/ccs/home/shehataa/QFwTmp/prte_dvm/dvm-uri -x LD_LIBRARY_PATH --report-bindings --display-map --display-allocation --np 1 /ccs/home/shehataa/mysleep.sh"
+		#cmd = "/ccs/home/shehataa/mysleep.sh"
+		for i in range(0, 1):
+			logging.debug(f"run -- {cmd}")
+			out, err, rc = self.run_cmd(cmd)
+			logging.debug(f"\tout = {out}\n\terr = {err}\n\trc = {rc}")
+		return
+
 		if not common.g_qpm_initialized:
 			raise DEFwNotReady("QPM has not initialized properly")
 
 		circuit = self.common_run(cid)
 		try:
+			logging.debug(f"qrc instance {circuit.assigned_qrc.instance}")
 			rc, output = circuit.assigned_qrc.instance.sync_run(cid, circuit.info)
 		except Exception as e:
 			self.free_resources(circuit)

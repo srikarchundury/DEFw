@@ -1,7 +1,7 @@
 from defw_agent_info import *
 from defw_util import prformat, fg, bg
 from defw import me
-import os, subprocess, copy, yaml, logging, sys, threading, socket, psutil
+import os, subprocess, copy, yaml, logging, sys, threading, socket, psutil, traceback
 from time import sleep
 from defw_exception import DEFwError, DEFwInProgress
 sys.path.append(os.path.split(os.path.abspath(__file__))[0])
@@ -56,6 +56,8 @@ class Process:
 
 	def kill(self):
 		logging.debug(f"Kill process with pid: {self.__pid}")
+		stack_trace_str = "".join(traceback.format_stack())
+		logging.debug(f"{stack_trace_str}")
 		self.__process.kill()
 		try:
 			os.waitpid(self.__pid, 0)
@@ -83,12 +85,14 @@ class Launcher:
 	def __init__(self, start=False):
 		self.__proc_dict = {}
 		self.__dead_procs = {}
+		common.shutdown = False
 		self.__monitor_thr = threading.Thread(target=self.monitor_thr)
 		self.__monitor_thr.start()
 
 	def monitor_thr(self):
-		logging.debug("Starting up monitor_thr2")
+		logging.debug(f"Starting monitor_thr {common.shutdown}")
 		while not common.shutdown:
+			logging.debug("monitor_thr started")
 			for pid, proc in self.__proc_dict.items():
 				exists = psutil.pid_exists(pid)
 				logging.debug(f"Examining -- {pid}:{proc}:{exists}:{proc.poll()}")
@@ -135,10 +139,18 @@ class Launcher:
 		pid = proc.getpid()
 		if not wait:
 			return pid
+		psutilproc = psutil.Process(pid)
+		logging.debug(f"process running with pid {pid}. Details {psutilproc}")
 		output, error, rc = proc.get_result()
 		if rc:
 			proc.kill()
 		del self.__proc_dict[pid]
+#		while True:
+#			rc = proc.poll()
+#			if rc:
+#				output = f"complete {rc}"
+#				error = f"complete {rc}"
+#				break
 		return output, error, rc
 
 	def kill(self, pid):
@@ -168,6 +180,7 @@ class Launcher:
 				del self.__proc_dict[pid]
 		logging.debug("Launcher Service shutdown requested")
 		common.shutdown = True
+		self.__monitor_thr.join()
 
 	def blocking_wait(self, pid=-1):
 		while True:

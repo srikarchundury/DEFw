@@ -1,5 +1,5 @@
 from .svc_launcher import Launcher
-import sys, os
+import sys, os, logging
 sys.path.append(os.path.split(os.path.abspath(__file__))[0])
 import launcher_common as common
 
@@ -19,9 +19,11 @@ svc_info = {'name': 'Launcher',
 service_classes = [Launcher]
 
 def initialize():
+	logging.debug("Initializing the launcher module")
 	pass
 
 def uninitialize():
+	logging.debug("Uninitializing the launcher module")
 	common.shutdown = True
 	pass
 
