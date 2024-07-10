@@ -18,6 +18,7 @@
 #include "defw_list.h"
 #include "defw_python.h"
 #include "defw_listener.h"
+#include "defw_print.h"
 
 extern fd_set g_tAllSet;
 extern int g_iMaxSelectFd;

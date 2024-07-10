@@ -27,7 +27,6 @@ int resmgr_disabled(void)
 void set_log_level(defw_log_level_t level)
 {
 	g_defw_cfg.loglevel = level;
-	logger_level(level);
 }
 
 char *get_defw_path(void)

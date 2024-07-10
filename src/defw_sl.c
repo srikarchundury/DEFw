@@ -208,19 +208,19 @@ defw_rc_t defw_start(int argc, char *argv[])
 		shell = EN_DEFW_RUN_INTERACTIVE;
 
 	/* create the log file */
-	out = stdout;
+	g_defw_cfg.out = stdout;
 	if (strlen(g_defw_cfg.tmp_dir) == 0)
 		getcwd(g_defw_cfg.tmp_dir, sizeof(g_defw_cfg.tmp_dir));
-	outlog = calloc(strlen(g_defw_cfg.tmp_dir) + strlen(OUT_LOG_NAME) + 2, 1);
-	if (!outlog) {
+	g_defw_cfg.outlog = calloc(strlen(g_defw_cfg.tmp_dir) + strlen(OUT_LOG_NAME) + 2, 1);
+	if (!g_defw_cfg.outlog) {
 		PERROR("out of memory");
 		return EN_DEFW_RC_LOG_CREATION_FAILURE;
 	}
-	sprintf(outlog, "%s/%s", g_defw_cfg.tmp_dir, OUT_LOG_NAME);
-	out = fopen(outlog, "w");
-	if (!out) {
+	sprintf(g_defw_cfg.outlog, "%s/%s", g_defw_cfg.tmp_dir, OUT_LOG_NAME);
+	g_defw_cfg.out = fopen(g_defw_cfg.outlog, "w");
+	if (!g_defw_cfg.out) {
 		PERROR("Failed to open log files: %s\n",
-			outlog);
+			g_defw_cfg.outlog);
 		return EN_DEFW_RC_LOG_CREATION_FAILURE;
 	}
 
@@ -275,7 +275,7 @@ defw_rc_t defw_start(int argc, char *argv[])
 
 	PDEBUG("%d: Exiting Framework\n", getpid());
 
-	fclose(out);
+	fclose(g_defw_cfg.out);
 
 	return EN_DEFW_RC_OK;
 }

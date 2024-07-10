@@ -7,25 +7,15 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <pthread.h>
-#include "defw_common.h"
+#include "defw.h"
 
 #define OUT_LOG_NAME "defw_out.log"
 #define OUT_PY_LOG "defw_py.log"
 #define LARGE_LOG_FILE 400000000 /* 400 MB */
 
-static FILE *out;
-static char *outlog;
-static pthread_spinlock_t log_spin_lock;
-static defw_log_level_t g_logger_level;
-
-static inline void logger_level(defw_log_level_t level)
-{
-	g_logger_level = level;
-}
-
 static inline void defw_init_logging(void)
 {
-	pthread_spin_init(&log_spin_lock, PTHREAD_PROCESS_PRIVATE);
+	pthread_spin_init(&g_defw_cfg.log_lock, PTHREAD_PROCESS_PRIVATE);
 }
 
 static inline void defw_log_print(int loglevel, bool error, char *color1,
@@ -39,21 +29,21 @@ static inline void defw_log_print(int loglevel, bool error, char *color1,
 	va_list args;
 	FILE *print = stderr;
 
-	if (g_logger_level == EN_LOG_LEVEL_MSG &&
+	if (g_defw_cfg.loglevel == EN_LOG_LEVEL_MSG &&
 	    loglevel != EN_LOG_LEVEL_MSG)
 		return;
 
-	if (g_logger_level < loglevel)
+	if (g_defw_cfg.loglevel < loglevel)
 		return;
 
-	if (!outlog || !out)
+	if (!g_defw_cfg.outlog || !g_defw_cfg.out)
 		goto print_err;
 
 	/* check if the log file has grown too large */
-	print = out;
-	stat(outlog, &st);
+	print = g_defw_cfg.out;
+	stat(g_defw_cfg.outlog, &st);
 	if (st.st_size > LARGE_LOG_FILE)
-		out = freopen(outlog, "w", out);
+		g_defw_cfg.out = freopen(g_defw_cfg.outlog, "w", g_defw_cfg.out);
 
 print_err:
 	time(&debugnow);
@@ -63,7 +53,7 @@ print_err:
 			debugtimestr[di] = '\0';
 	}
 
-	pthread_spin_lock(&log_spin_lock);
+	pthread_spin_lock(&g_defw_cfg.log_lock);
 	fprintf(print, "%s%lu %s %s:%s:%d " RESET "%s- ", color1,
 		pthread_self(), (error) ? "ERROR" : "", debugtimestr, file, line, color2);
 	va_start(args, fmt);
@@ -71,7 +61,7 @@ print_err:
 	va_end(args);
 	fprintf(print, RESET"\n");
 	fflush(print);
-	pthread_spin_unlock(&log_spin_lock);
+	pthread_spin_unlock(&g_defw_cfg.log_lock);
 }
 
 #define PERROR(fmt, args...) defw_log_print(EN_LOG_LEVEL_ERROR, true, BOLDRED, RED, __FILE__, __LINE__, fmt, ## args)

@@ -12,7 +12,6 @@
 #include "defw_common.h"
 #include "defw_agent.h"
 #include "defw_message.h"
-#include "defw_print.h"
 #include "libdefw_connect.h"
 
 #define DEFW_UUID_STR_LEN		(UUID_STR_LEN+12)
@@ -53,6 +52,9 @@ typedef struct defw_config_params_s {
 			       * starting the test
 			       */
 	int loglevel;
+	pthread_spinlock_t log_lock;
+	FILE *out;
+	char *outlog;
 } defw_config_params_t;
 
 extern defw_config_params_t g_defw_cfg;

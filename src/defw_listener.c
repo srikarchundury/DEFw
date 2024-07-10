@@ -19,6 +19,7 @@
 #include "libdefw_agent.h"
 #include "defw_message.h"
 #include "defw_listener.h"
+#include "defw_print.h"
 
 #define MAX_AGENT_NOTIFICATION 1024
 

@@ -5,6 +5,7 @@
 #include "defw_python.h"
 #include "defw_listener.h"
 #include "defw_global.h"
+#include "defw_print.h"
 
 extern defw_config_params_t g_defw_cfg;
 static PyObject *g_interactive_shell;
