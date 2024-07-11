@@ -106,6 +106,10 @@ def spawn_qrc(launcher_api, port):
 		g_launchers[launcher_api] = [qrc_inst]
 
 def start_qrcs(num_qrc, host_list):
+	if 'QFW_QPM_START_QRC' in os.environ and \
+	   os.environ['QFW_QPM_START_QRC'].upper() == 'OFF':
+		return
+
 	import yaml
 	global g_timeout
 	len_host_list = len(host_list)

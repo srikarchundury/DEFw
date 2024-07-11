@@ -3,7 +3,7 @@ from defw_util import expand_host_list, round_half_up, round_to_nearest_power_of
 from defw import me
 import logging, uuid, time, queue, threading, logging, yaml
 from defw_exception import DEFwError, DEFwNotReady, DEFwInProgress
-import sys, os, re, math
+import sys, os, re, math, psutil
 from defw_proc import Process
 
 sys.path.append(os.path.split(os.path.abspath(__file__))[0])
@@ -296,24 +296,40 @@ class QPM:
 	def run_cmd(self, cmd):
 		proc = Process(cmd, None, "")
 		pid = proc.launch()
+		procinfo = psutil.Process(pid)
+		try:
+			logging.debug(f"------{procinfo}")
+			logging.debug(f"------{procinfo.ppid()}")
+			logging.debug(f"------{procinfo.name()}")
+			logging.debug(f"------{procinfo.exe()}")
+			logging.debug(f"------{procinfo.cmdline()}")
+			logging.debug(f"------{procinfo.cwd()}")
+			logging.debug(f"------{procinfo.environ()}")
+			logging.debug(f"------{procinfo.status()}")
+			logging.debug(f"------{procinfo.create_time()}")
+			logging.debug(f"------{procinfo.cpu_times()}")
+			logging.debug(f"------{procinfo.connections()}")
+			logging.debug(f"------{procinfo.threads()}")
+			logging.debug(f"------{procinfo.children()}")
+		except:
+			pass
 		stdout, stderr, rc = proc.get_result()
-		time.sleep(2)
-		#proc.terminate()
+		proc.terminate()
 		#rc = proc.run()
 		return stdout, stderr, rc
 		#return "out", "err", rc
 
-
-	def sync_run(self, cid):
-		#cmd = "/sw/frontier/ums/ums024/cce/15.0.0/install/openmpi-5.0.1-ompix-a4-20240320.debug/bin/prterun --dvm file:/ccs/home/shehataa/QFwTmp/prte_dvm/dvm-uri -x LD_LIBRARY_PATH --report-bindings --display-map --display-allocation --np 1 /ccs/home/shehataa/mysleep.sh"
-		cmd = "/sw/frontier/ums/ums024/cce/15.0.0/install/openmpi-5.0.1-ompix-a4-20240320.debug/bin/mpirun --dvm file:/ccs/home/shehataa/QFwTmp/prte_dvm/dvm-uri -x LD_LIBRARY_PATH --report-bindings --display-map --display-allocation --np 1 /ccs/home/shehataa/mysleep.sh"
+	def test_sleep_app(self):
+		cmd = "/sw/crusher/ums/ompix/DEVELOP/cce/13.0.0/install/openmpi-main-borg/bin/prterun -v --dvm file:/ccs/home/shehataa/QFwTmp/prte_dvm/dvm-uri -x LD_LIBRARY_PATH --report-bindings --display-map --display-allocation --pmixmca pmix_server_spawn_verbose 100 --pmixmca pmix_client_spawn_verbose 100 --np 1 /ccs/home/shehataa/mysleep.sh"
+		#cmd = "/sw/frontier/ums/ums024/cce/15.0.0/install/openmpi-5.0.1-ompix-a4-20240320.debug/bin/mpirun --dvm file:/ccs/home/shehataa/QFwTmp/prte_dvm/dvm-uri -x LD_LIBRARY_PATH --report-bindings --display-map --display-allocation --np 1 /ccs/home/shehataa/mysleep.sh"
 		#cmd = "/ccs/home/shehataa/mysleep.sh"
-		for i in range(0, 1):
+		for i in range(0, 3):
 			logging.debug(f"run -- {cmd}")
 			out, err, rc = self.run_cmd(cmd)
 			logging.debug(f"\tout = {out}\n\terr = {err}\n\trc = {rc}")
-		return
+		return f"This is a test return for command with rc: {rc}", rc
 
+	def sync_run(self, cid):
 		if not common.g_qpm_initialized:
 			raise DEFwNotReady("QPM has not initialized properly")
 

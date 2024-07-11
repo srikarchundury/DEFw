@@ -308,6 +308,8 @@ class QRC:
 		gpuwrapper = shutil.which("gpuwrapper.sh")
 
 		if not circuit_runner or not gpuwrapper:
+			logging.debug(f"{os.environ['PATH']}")
+			logging.debug(f"{os.environ['LD_LIBRARY_PATH']}")
 			raise DEFwExecutionError("Couldn't find circuit_runner or gpuwrapper. Check paths")
 
 		if not os.path.exists(info["qfw_dvm_uri_path"].split('file:')[1]):
@@ -332,16 +334,16 @@ class QRC:
 #			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]} ' \
 #			  f'-c {compiler} -v'
 
-#		cmd = f'{exec_cmd} --dvm {dvm} -x LD_LIBRARY_PATH ' \
-#			  f'--mca btl ^tcp,ofi,vader,openib ' \
-#			  f'--mca pml ^ucx --mca mtl ofi --mca opal_common_ofi_provider_include '\
-#			  f'{info["provider"]} --map-by {info["mapping"]} --bind-to core '\
-#			  f'--np {info["np"]} --host {hosts} {gpuwrapper} -v {circuit_runner} ' \
-#			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]} ' \
-#			  f'-c {compiler}'
-
 		cmd = f'{exec_cmd} --dvm {dvm} -x LD_LIBRARY_PATH ' \
-			  f'--report-bindings --display-map --display-allocation --np 1 /ccs/home/shehataa/mysleep.sh '
+			  f'--mca btl ^tcp,ofi,vader,openib ' \
+			  f'--mca pml ^ucx --mca mtl ofi --mca opal_common_ofi_provider_include '\
+			  f'{info["provider"]} --map-by {info["mapping"]} --bind-to core '\
+			  f'--np {info["np"]} --host {hosts} {gpuwrapper} -v {circuit_runner} ' \
+			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]} ' \
+			  f'-c {compiler}'
+
+#		cmd = f'{exec_cmd} --dvm {dvm} -x LD_LIBRARY_PATH ' \
+#			  f'--report-bindings --display-map --display-allocation --np 1 /ccs/home/shehataa/mysleep.sh '
 
 #		cmd = f'{exec_cmd} --dvm {dvm} -x LD_LIBRARY_PATH ' \
 #			  f'--mca btl ^tcp,ofi,vader,openib --pmixmca pmix_client_spawn_verbose 100 ' \
@@ -375,10 +377,15 @@ class QRC:
 		with open(qasm_file, 'w') as f:
 			f.write(qasm_c)
 
-		circ.set_running()
-		launcher = svc_launcher.Launcher()
-		logging.debug(f"Running Circuit --\n{qasm_c}")
-		cmd = self.form_cmd(circ, qasm_file)
+		try:
+			circ.set_running()
+			launcher = svc_launcher.Launcher()
+			logging.debug(f"Running Circuit --\n{qasm_c}")
+			cmd = self.form_cmd(circ, qasm_file)
+		except Exception as e:
+			os.remove(qasm_file)
+			logging.critical(f"Got Exception: {e}")
+			raise e
 
 		task_info = {}
 		pid = -1
@@ -428,7 +435,7 @@ class QRC:
 			f.write(qasm_c)
 
 		circ.set_running()
-		#launcher = svc_launcher.Launcher()
+		launcher = svc_launcher.Launcher()
 		logging.debug(f"Running Circuit --\n{qasm_c}")
 		cmd = self.form_cmd(circ, qasm_file)
 		logging.debug(f"Running -- {cmd}")
@@ -437,16 +444,15 @@ class QRC:
 			#env = {'FI_LOG_LEVEL': 'info'}
 			#output, error, rc = launcher.launch(cmd, env=env, wait=True)
 			output, error, rc = launcher.launch(cmd, wait=True)
-			#output, error, rc = self.run_cmd(cmd)
 			logging.debug(f"Completed -- {cmd} -- returned {rc} -- {output} -- {error}")
 		except Exception as e:
 			os.remove(qasm_file)
 			logging.critical(f"Failed to launch {cmd}")
 			logging.critical(f"encountered exception {e}")
-			#launcher.shutdown()
+			launcher.shutdown()
 			raise e
 
-		#launcher.shutdown()
+		launcher.shutdown()
 		logging.debug(f"Removing {qasm_file}")
 		os.remove(qasm_file)
 

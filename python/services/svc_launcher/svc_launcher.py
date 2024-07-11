@@ -129,6 +129,7 @@ class Launcher:
 			   target=None, muse='', modules='', python_env=''):
 		logging.debug(f"Starting {cmd} on {target}")
 		if target and target != socket.gethostname():
+			logging.debug(f"run_cmd_on_target {cmd} on {target}")
 			self.run_cmd_on_target(cmd, env, muse, modules, python_env, target)
 			return 0
 		proc = Process(cmd, env, path)

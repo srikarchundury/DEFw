@@ -2,7 +2,7 @@ from pathlib import Path
 from cdefw_agent import *
 from defw_common_def import *
 import defw_common_def as common
-from defw_exception import DEFwError, DEFwDumper
+from defw_exception import DEFwError, DEFwDumper, DEFwCommError
 from defw_cmd import defw_exec_local_cmd
 import importlib, socket
 import cdefw_global
@@ -1268,8 +1268,32 @@ def connect_to_resource(res, res_name):
 	connect_to_services(ep)
 	class_obj = getattr(service_apis[res_name],
 						res[list(res.keys())[0]]['api'])
-	launcher_api = class_obj(ep[0])
-	return launcher_api
+	api = class_obj(ep[0])
+	return api
+
+def get_first_service(res_name, timeout):
+	if res_name not in service_apis:
+		raise DEFwNotFound(f"{res_name} not found");
+
+	wait = 0
+	while wait < timeout:
+		res = resmgr.get_services(res_name)
+		if res and len(res) > 0:
+			break
+		wait += 1
+		logging.debug(f"Waiting to connect to a {res_name}")
+		time.sleep(1)
+
+	if len(res) == 0:
+		raise DEFwCommError(f"Couldn't connect to a {res_name}")
+
+	logging.debug(f"Found {res_name}: {res}")
+	res_d = {}
+	for k, v in res.items():
+		res_d[k] = v
+		break
+
+	return connect_to_resource(res_d, res_name)
 
 # TODO: We need a way to disconnect endpoint
 
