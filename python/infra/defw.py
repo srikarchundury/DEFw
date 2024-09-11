@@ -2,7 +2,7 @@ from pathlib import Path
 from cdefw_agent import *
 from defw_common_def import *
 import defw_common_def as common
-from defw_exception import DEFwError, DEFwDumper, DEFwCommError
+from defw_exception import DEFwError, DEFwDumper, DEFwCommError, DEFwNotFound
 from defw_cmd import defw_exec_local_cmd
 import importlib, socket
 import cdefw_global
@@ -1271,7 +1271,28 @@ def connect_to_resource(res, res_name):
 	api = class_obj(ep[0])
 	return api
 
+def wait_resmgr(timeout):
+	global resmgr
+
+	wait = 0
+	if not resmgr:
+		while wait < timeout:
+			if resmgr:
+				return True
+			wait += 1
+			logging.debug("waiting to connect to resource manager")
+			time.sleep(1)
+	else:
+		return True
+
+	return False
+
 def get_first_service(res_name, timeout):
+	global resmgr
+
+	if not wait_resmgr(timeout):
+		raise DEFwNotFound("resource manager not found");
+
 	if res_name not in service_apis:
 		raise DEFwNotFound(f"{res_name} not found");
 
