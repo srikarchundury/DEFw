@@ -929,7 +929,7 @@ class Myself:
 		from defw_workers import put_shutdown
 		put_shutdown()
 		updater_thread.join()
-		print("Shutting down the DEFw")
+		logging.debug("Shutting down the DEFw")
 		print_all_thread_stack_traces_to_logger()
 		from defw_telnet_sr import g_tns
 		if g_tns:
