@@ -209,7 +209,7 @@ class Launcher:
 		from . import svc_info
 		cap = Capability(svc_info['name'], svc_info['description'], 1)
 		svc = ServiceDescr(svc_info['name'], svc_info['description'], [cap], 1)
-		info = DEFwAgentInfo(self.__class__.__name__,
+		info = DEFwServiceInfo(self.__class__.__name__,
 						  self.__class__.__module__, [svc])
 		return info
 

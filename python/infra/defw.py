@@ -1263,13 +1263,15 @@ def connect_to_services(endpoints):
 		active_service_agents.connect(ep)
 		logging.debug(f"Connection request finished: {ep}")
 
-def connect_to_resource(res, res_name):
-	ep = resmgr.reserve(me.my_endpoint(), res)
+def connect_to_resource(service_infos, res_name):
+	ep = resmgr.reserve(me.my_endpoint(), service_infos)
 	connect_to_services(ep)
-	class_obj = getattr(service_apis[res_name],
-						res[list(res.keys())[0]]['api'])
-	api = class_obj(ep[0])
-	return api
+	apis = []
+	for service_info in service_infos:
+		class_obj = getattr(service_apis[res_name], res_name)
+		api = class_obj(ep[0])
+		apis.append(api)
+	return apis
 
 def wait_resmgr(timeout):
 	global resmgr

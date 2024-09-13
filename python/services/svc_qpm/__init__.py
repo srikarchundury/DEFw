@@ -13,6 +13,7 @@ import qpm_common as common
 # the service module. The name is also used as a key through out the
 # infrastructure. Without it the service module will not load.
 svc_info = {'name': 'QPM',
+			'module': __name__,
 			'description': 'Quantum Platform Manager',
 			'version': 1.0}
 
@@ -121,30 +122,27 @@ def start_qrcs(num_qrc, host_list):
 	# Based on the number of GPUs tell the launcher to start a QRC per GPU
 	# and bind it to the GPU
 	wait = 0
-	res = {}
+	service_infos = []
 	complete = False
 	found_hosts = []
 	found_launchers = []
-	logging.debug(f"Here are the available launchers: {res}")
-	while len(res) >= 0:
+	while len(service_infos) >= 0:
+		service_infos = defw.resmgr.get_services('Launcher')
+		logging.debug(f"Launcher resources return {service_infos}")
 		wait += 1
 		if wait >= g_timeout:
 			break
-		res = defw.resmgr.get_services('Launcher')
-		logging.debug(f"Launcher resources return {res}")
-		if not res:
+		if not service_infos:
 			sleep(5)
 			continue
-		for k, r in res.items():
-			if r['residence'].hostname in host_list and \
-			   r['residence'].hostname not in found_hosts:
-				found_hosts.append(r['residence'].hostname)
-				# if the launcher is on the same host as me, then insert
-				# it at the beginning of the list so we prefer it for use.
-				if r['residence'].hostname == defw.me.my_hostname():
-					found_launchers.insert(0, {k:r})
-				else:
-					found_launchers.append({k:r})
+		hostname = service_infos[0].get_endpoint().hostname
+		if hostname in host_list and \
+		   hostname not in found_hosts:
+			found_hosts.append(hostname)
+			if hostname == defw.me.my_hostname():
+				found_launchers.insert(0, service_infos)
+			else:
+				found_launchers.append(service_infos)
 		#if len(found_hosts) != len_host_list:
 		# wait for only one launcher
 		if len(found_hosts) != 1:
@@ -161,8 +159,7 @@ def start_qrcs(num_qrc, host_list):
 
 	launcher_apis = []
 	for launcher in found_launchers:
-		launcher_apis.append(defw.connect_to_resource(launcher, "Launcher"))
-		#launcher_apis.append(connect_to_launcher(launcher))
+		launcher_apis.append(defw.connect_to_resource(launcher, "Launcher")[0])
 
 	logging.debug(f"Here are the launcher APIs: {launcher_apis}")
 

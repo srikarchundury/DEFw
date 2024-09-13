@@ -4,7 +4,7 @@ import logging
 
 # This is what an agent (either a service or a client) needs to return
 # when queried about the services it offers:
-# DEFwAgentInfo contains a list of ServiceDescr
+# DEFwServiceInfo contains a list of ServiceDescr
 # Each ServiceDescr has a list of Capability
 # Each Capability describes a capacity it can handle
 #
@@ -62,7 +62,10 @@ class ServiceDescr:
 
 	def consume_capacity(self):
 		if self.__cur_capacity == self.__max_capacity:
-			raise FIWOutOfResources(f"Exceeded capacity on {self.__service_name}")
+			err = f"Exceeded capacity on {self.__service_name}. " \
+				  f"Current Capacity = {self.__cur_capacity}. " \
+				  f"Maximum Capacity = {self.__max_capacity}"
+			raise DEFwOutOfResources(err)
 		self.__cur_capacity += 1
 
 	def release_capacity(self):
@@ -70,18 +73,32 @@ class ServiceDescr:
 			raise FIWOutOfResources(f"Release unreserved service {self.__service_name}")
 		self.__cur_capacity += 1
 
-class DEFwAgentInfo:
+class DEFwServiceInfo:
 	def __init__(self, name, mname, services):
 		self.__name = name
 		self.__module_name = mname
 		self.__my_ep = me.my_endpoint()
 		self.__owned_services = services
+		self.__loc_db = None
+		self.__key = ''
 
 	def __contains__(self, item):
 		for svc in self.__owned_services:
 			if svc.get_service_name() == item.get_service_name():
 				return True
 		return False
+
+	def add_key(self, uuid_key):
+		self.__key = uuid_key
+
+	def get_key(self):
+		return self.__key
+
+	def add_loc_db(self, db_name):
+		self.__loc_db = db_name
+
+	def get_loc_db(self):
+		return self.__loc_db
 
 	def get_services(self, Sfilter=None):
 		if not Sfilter:
@@ -105,6 +122,6 @@ class DEFwAgentInfo:
 		return self.__my_ep
 
 	def __repr__(self):
-		return f"Agent Info(name={self.__name}, Residence={self.__my_ep}, Services Owned={self.__owned_services}"
+		return f"Service Info(name={self.__name}, Residence={self.__my_ep}, Services Owned={self.__owned_services}"
 
 

@@ -11,15 +11,16 @@ class BaseAgentAPI(BaseRemote):
 		# call their query function. If they don't have a query function
 		# then they won't be picked up or advertised.
 		#
-		#traceback.print_stack()
 		from defw import services
+		svcs = []
 		for svc, module in services:
 			if module.svc_info['name'] == 'Resource Manager':
 				logging.debug("Can't query Resource Manager");
 				continue
 			for c in module.service_classes:
 				obj = c(start=False)
-				return obj.query()
+				svcs.append(obj.query())
+		return svcs
 
 	'''
 	reserve the svc passed in from the agent described by info

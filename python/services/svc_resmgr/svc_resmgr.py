@@ -45,7 +45,6 @@ class DEFwResMgr:
 			if ep == self.__my_ep and skip_self:
 				continue
 			client_api = BaseAgentAPI(target=ep)
-			#aname = agent.get_name()
 			aname = ep.get_id()
 			db[aname] = \
 				{'agent': agent,
@@ -53,6 +52,17 @@ class DEFwResMgr:
 				 'info': client_api.query()}
 			if not 'state' in db[aname]:
 				db[aname]['state'] = AGENT_STATE_CONNECTED
+
+			for i in db[aname]['info']:
+				i.add_key(aname)
+				if db == self.__services_db:
+					i.add_loc_db(DEFwResMgr.SVC)
+				elif db == self.__active_services_db:
+					i.add_loc_db(DEFwResMgr.ACTV_SVC)
+				elif db == self.__clients_db:
+					i.add_loc_db(DEFwResMgr.CLT)
+				elif db == self.__active_clients_db:
+					i.add_loc_db(DEFwResMgr.ACTV_CLT)
 
 	def __reload_resources(self):
 		self.__grab_agent_info(client_agents, self.__clients_db)
@@ -132,6 +142,20 @@ class DEFwResMgr:
 			del self.__clients_db[ep.name]
 		return
 
+	def get_info(self, db, service_filter):
+		for k, v in db.items():
+			if not v['info']:
+				continue
+
+			if not service_filter:
+				return v['info']
+
+			for i in v['info']:
+				if i.get_name() == service_filter:
+					return [i]
+
+		return []
+
 	"""
 	List all available Agents in the DEFw Network
 
@@ -146,25 +170,11 @@ class DEFwResMgr:
 	"""
 	def get_services(self, service_filter=''):
 		logging.debug(f"get_services({service_filter})")
-		services = {}
+		all_info = []
 		self.__reload_resources()
-		for k, v in self.__active_services_db.items():
-			if not v['info']:
-				continue
-			s =  v['info'].get_services(service_filter)
-			if len(s) > 0:
-				services[k] = {'loc': DEFwResMgr.ACTV_SVC, 'services': s,
-							   'api': v['info'].get_name(),
-							   'residence': v['info'].get_endpoint()}
-		for k, v in self.__services_db.items():
-			if not v['info']:
-				continue
-			s =  v['info'].get_services(service_filter)
-			if len(s) > 0:
-				services[k] = {'loc': DEFwResMgr.SVC, 'services': s,
-							   'api': v['info'].get_name(),
-							   'residence': v['info'].get_endpoint()}
-		return services
+		all_info += self.get_info(self.__active_services_db, service_filter)
+		all_info += self.get_info(self.__services_db, service_filter)
+		return all_info
 
 	"""
 	Reserve an Agent which exists on the DEFw Network
@@ -179,28 +189,28 @@ class DEFwResMgr:
 		DEFwCommError: If Resource Manager is not reachable
 		DEFwReserveError: If there is an error in the reservation process
 	"""
-	def reserve(self, client_ep, services, *args, **kwargs):
+	def reserve(self, client_ep, service_infos, *args, **kwargs):
 		svc_eps = []
-		for k, v in services.items():
-			db = self.__dbs[v['loc']]
-			if not db[k]['state'] & AGENT_STATE_REGISTERED:
-				DEFwReserveError(f"Agent {k} is not registered")
-			for s in v['services']:
-				s.consume_capacity()
-			logging.debug(f"reserve - {k}, {v}")
-			api = db[k]['api']
+		for service_info in service_infos:
+			db = self.__dbs[service_info.get_loc_db()]
+			db_key = service_info.get_key()
+			if not db[db_key]['state'] & AGENT_STATE_REGISTERED:
+				DEFwReserveError(f"Agent {db_key} is not registered")
+			services = service_info.get_services()
+			for svc in services:
+				svc.consume_capacity()
+			api = db[db_key]['api']
 			try:
-				api.reserve(db[k]['info'], v['services'], client_ep, *args, **kwargs)
+				api.reserve(service_info, services, client_ep, *args, **kwargs)
 			except Exception as e:
 				raise DEFwReserveError(str(e))
-			ep = db[k]['agent'].get_ep()
+			ep = db[db_key]['agent'].get_ep()
 			# if this is a remote endpoint we should NULL out the blk_uuid
 			# because it wouldn't mean anything here.
 			if ep.remote_uuid != me.my_uuid():
 				ep.blk_uuid = str(uuid.UUID(int=0))
-			svc_eps.append(db[k]['agent'].get_ep())
+			svc_eps.append(db[db_key]['agent'].get_ep())
 		return svc_eps
-
 
 	"""
 	Release a reserved Agent
@@ -215,14 +225,16 @@ class DEFwResMgr:
 		DEFwCommError: If Resource Manager is not reachable
 		DEFwReserveError: If there is an error in the release process
 	"""
-	def release(self, services):
-		for k, v in services.items():
-			if not self.__services_db[k]['state'] & AGENT_STATE_REGISTERED:
-				DEFwReserveError(f"Agent {f} is not registered")
-			for s in v['services']:
-				s.release_capacity()
-			logging.debug(f"release - {k}, {v}")
-			api = self.__services_db[k]['api']
+	def release(self, service_infos):
+		for service_info in service_infos:
+			db = self.__dbs[service_info.get_loc_db()]
+			db_key = service_info.get_key()
+			if not db[db_key]['state'] & AGENT_STATE_REGISTERED:
+				DEFwReserveError("Agent is not registered")
+			services = service_info.get_services()
+			for svc in services:
+				svc.release_capacity()
+			api = db[db_key]['api']
 			try:
 				api.release()
 			except Exception as e:
