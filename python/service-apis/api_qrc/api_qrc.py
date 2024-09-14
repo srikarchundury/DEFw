@@ -1,8 +1,8 @@
 from defw_remote import BaseRemote
 
 class QRC(BaseRemote):
-	def __init__(self, ep):
-		super().__init__(target=ep)
+	def __init__(self, si):
+		super().__init__(service_info = si)
 
 	def sync_run(self, cid, info):
 		pass

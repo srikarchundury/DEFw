@@ -1,10 +1,11 @@
+import defw
 from defw_remote import BaseRemote
 from defw_util import prformat, fg, bg
 import os, traceback, logging
 
 class BaseAgentAPI(BaseRemote):
 	def __init__(self, target=None, *args, **kwargs):
-		super().__init__(target, *args, **kwargs)
+		super().__init__(target=target, *args, **kwargs)
 
 	def query(self):
 		# go over each of the service in each of the services module and
@@ -15,7 +16,8 @@ class BaseAgentAPI(BaseRemote):
 		svcs = []
 		for svc, module in services:
 			if module.svc_info['name'] == 'Resource Manager':
-				logging.debug("Can't query Resource Manager");
+				if defw.me.is_resmgr():
+					svcs.append(defw.resmgr.query())
 				continue
 			for c in module.service_classes:
 				obj = c(start=False)
@@ -39,3 +41,18 @@ class BaseAgentAPI(BaseRemote):
 	def release(self, services):
 		prformat(fg.bold+fg.lightgrey+bg.red, "Client doesn't implement RELEASE API")
 		pass
+
+def query_service_info(ep, name=None):
+	logging.debug(f"Query service on endpoint {ep}")
+	client_api = BaseAgentAPI(target=ep)
+	svcs = client_api.query()
+	logging.debug(f"Got service infos: {svcs}")
+	if name:
+		for svc in svcs:
+			logging.debug(f"SVC info is {svc.get_name()} <-> {name}")
+			if name == svc.get_name():
+				return svc
+		return []
+	return svcs
+
+

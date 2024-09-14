@@ -1,7 +1,7 @@
 import threading, queue, time, uuid, logging, yaml, importlib, traceback, sys
 import defw_common_def as common
 from cdefw_global import *
-from defw_exception import DEFwCommError, DEFwError, DEFwInternalError
+from defw_exception import DEFwCommError, DEFwError, DEFwInternalError, DEFwNotFound
 from cdefw_agent import defw_send_req, defw_send_rsp, defw_connect_to_service, \
 			defw_connect_to_client
 from defw import client_agents, service_agents, \
@@ -193,11 +193,17 @@ class WorkerThread:
 			#if not me.is_resmgr() and not defw.resmgr:
 			if not me.is_resmgr():
 				if 'Resource Manager' in service_apis:
-					defw.resmgr = service_apis['Resource Manager'].service_classes[0] \
-						(ep=active_service_agents.get_resmgr())
-					logging.debug(f"Created resource manager API: {defw.resmgr}")
-					from defw import updater_queue
-					updater_queue.put({'type': 'resmgr', 'resmgr': defw.resmgr})
+					from defw_agent_baseapi import query_service_info
+					si = query_service_info(active_service_agents.get_resmgr(),
+							 'DEFwResMgr')
+					logging.debug(f"Querying Resource Manager returned: {si}")
+					if si:
+						defw.resmgr = service_apis['Resource Manager'].service_classes[0](si)
+						logging.debug(f"Created resource manager API: {defw.resmgr}")
+						from defw import updater_queue
+						updater_queue.put({'type': 'resmgr', 'resmgr': defw.resmgr})
+					else:
+						raise DEFwNotFound("Couldn't Query resource manager")
 		except Exception as e:
 			logging.debug("Calling system up")
 			if common.is_system_up():

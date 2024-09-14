@@ -1269,7 +1269,7 @@ def connect_to_resource(service_infos, res_name):
 	apis = []
 	for service_info in service_infos:
 		class_obj = getattr(service_apis[res_name], res_name)
-		api = class_obj(ep[0])
+		api = class_obj(service_info)
 		apis.append(api)
 	return apis
 

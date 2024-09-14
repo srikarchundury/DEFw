@@ -1,4 +1,5 @@
 from defw_exception import DEFwCommError, DEFwAgentNotFound
+from defw_agent_baseapi import query_service_info
 from defw_util import expand_host_list
 from .svc_qpm import QPM, QRCInstance
 import cdefw_global
@@ -28,18 +29,6 @@ service_classes = [QPM]
 g_launchers = {}
 g_shutdown = False
 
-def connect_to_launcher(res):
-	# . Add each QRC endpoint on the QPM list
-	# . QPM will subsequently post messages on each of the QRCs
-	ep = defw.resmgr.reserve(defw.me.my_endpoint(), res)
-	# TODO have to have a corresponding disconnect from service
-	logging.debug(f"connect to launcher {ep}")
-	defw.connect_to_services(ep)
-	class_obj = getattr(defw.service_apis['Launcher'],
-						res[list(res.keys())[0]]['api'])
-	launcher_api = class_obj(ep[0])
-	return launcher_api
-
 def wait_for_all_qrcs():
 	global g_timeout
 	# Make sure that the QRCs have connected to me.
@@ -59,7 +48,10 @@ def wait_for_all_qrcs():
 			if not qrc_key:
 				continue
 			qrc_ep = defw.service_agents[qrc_key].get_ep()
-			qrc_api = defw.service_apis['QRC'].QRC(qrc_ep)
+			svc_info = query_service_info(qrc_ep, 'QRC')
+			if not svc_info:
+				raise DEFwAgentNotFound(f"QRCs did not start")
+			qrc_api = defw.service_apis['QRC'].QRC(svc_info)
 			qrc_inst.add_qrc(qrc_api)
 			qrc_inst.status = QRCInstance.STATUS_CONNECTED
 			qrc_inst.ep = qrc_ep

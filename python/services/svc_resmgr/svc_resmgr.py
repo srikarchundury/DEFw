@@ -1,6 +1,7 @@
 """
 Interface module for the Resource Manager
 """
+from defw_agent_info import *
 from defw_agent import Endpoint
 from defw import me, active_service_agents, active_client_agents, \
 					service_agents, client_agents
@@ -241,6 +242,10 @@ class DEFwResMgr:
 				raise DEFwReserveError(str(e))
 
 	def query(self):
-		prformat(fg.bold+fg.lightgrey+bg.red, "Resmgr doesn't implement QUERY API")
-		pass
+		from . import svc_info
+		cap = Capability(svc_info['name'], svc_info['description'], 1)
+		svc = ServiceDescr(svc_info['name'], svc_info['description'], [cap], 1)
+		info = DEFwServiceInfo(self.__class__.__name__,
+						  self.__class__.__module__, [svc])
+		return info
 

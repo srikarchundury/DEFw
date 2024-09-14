@@ -9,16 +9,25 @@ class BaseRemote(object):
 	# the idea of the *args and **kwargs in the __init__ method is for subclasses
 	# to pass all their arguments to the super() class. Then the superclass can then pass
 	# that to the remote, so the remote class can be instantiated appropriately
-	def __init__(self, target=None, blocking=True, *args, **kwargs):
+	def __init__(self, service_info=None, blocking=True, target=None, *args, **kwargs):
 		# if a target is specified other than me then we're going
 		# to execute on that target
-		if target:
+		self.__blocking = blocking
+		if service_info:
+			try:
+				target = service_info.get_endpoint()
+				self.__agent = get_agent(target)
+			except Exception as e:
+				print(e)
+				raise DEFwError("Unknown Agent for service_info: ", service_info)
+			self.__remote = True
+		elif target:
 			try:
 				self.__agent = get_agent(target)
-			except:
+			except Exception as e:
+				print(e)
 				raise DEFwError("Unknown Agent: ", target)
 			self.__remote = True
-			self.__blocking = blocking
 		else:
 			self.__remote = False
 			return
@@ -26,29 +35,10 @@ class BaseRemote(object):
 		if not self.__agent:
 			raise DEFwAgentNotFound(f"agent not found {target}")
 
-		# We're going to have to handle a special case with service-apis.
-		# The module name for these calls are going to be something like:
-		#	service-apis.suite_qhpc.api_qhpc
-		# however, we don't want that we want:
-		#	services.suite_qhpc.svc_qhpc
-		# TODO: There ought to be a better way to do this but for now
-		# we'll just parse out the 'dot' notation and do the appropriate
-		# massaging
-		#
-		module = type(self).__module__
-		split = module.split('.')
-		new_module_comp = []
-		for s in split:
-			if s == 'service-apis':
-				new_module_comp.append('services')
-			elif 'api_' in s:
-				ns = 'svc_'+s.split('api_')[1]
-				new_module_comp.append(ns)
-			else:
-				new_module_comp.append(s)
-		new_module = '.'.join(new_module_comp)
-
-		self.__service_module = new_module
+		if service_info:
+			self.__service_module = service_info.get_module_name()
+		elif target:
+			self.__service_module = type(self).__module__
 
 		self.__class_id = str(uuid.uuid1())
 		self.__agent.send_req('instantiate_class', me.my_endpoint(),

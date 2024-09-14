@@ -3,7 +3,9 @@ from .svc_resmgr import *
 
 # This is used by the infrastructure to display information about
 # the service module
-svc_info = {'name': 'Resource Manager', 'version': 1.0}
+svc_info = {'name': 'Resource Manager',
+			'description': 'Resource and Directory Service Manager Service',
+			'version': 1.0}
 
 # This is used by the infrastructure to define all the service classes.
 # Each class should be a separate service. Each class should implement the

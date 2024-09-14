@@ -20,5 +20,5 @@ export QFW_QPM_ASSIGNED_HOSTS=$(hostname)
 export QFW_MODULE_USE_PATH="/sw/frontier/ums/ums024/cce/15.0.0/modules/"
 export QFW_PATH=/sw/frontier/qhpc/QFw
 export QFW_BIN_PATH=$QFW_PATH/bin
-export QFW_QPM_START_QRC=off
+export QFW_QPM_START_QRC=on
 
