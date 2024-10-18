@@ -1289,35 +1289,6 @@ def wait_resmgr(timeout):
 
 	return False
 
-def get_first_service(res_name, timeout):
-	global resmgr
-
-	if not wait_resmgr(timeout):
-		raise DEFwNotFound("resource manager not found");
-
-	if res_name not in service_apis:
-		raise DEFwNotFound(f"{res_name} not found");
-
-	wait = 0
-	while wait < timeout:
-		res = resmgr.get_services(res_name)
-		if res and len(res) > 0:
-			break
-		wait += 1
-		logging.debug(f"Waiting to connect to a {res_name}")
-		time.sleep(1)
-
-	if len(res) == 0:
-		raise DEFwCommError(f"Couldn't connect to a {res_name}")
-
-	logging.debug(f"Found {res_name}: {res}")
-	res_d = {}
-	for k, v in res.items():
-		res_d[k] = v
-		break
-
-	return connect_to_resource(res_d, res_name)
-
 # TODO: We need a way to disconnect endpoint
 
 def get_resmgr():
