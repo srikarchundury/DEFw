@@ -1,4 +1,11 @@
 from defw_remote import BaseRemote
+from enum import IntFlag
+
+class ResMgrType(IntFlag):
+	RESMGR_TYPE_DEFW = 1 << 0
+
+class ResMgrCapability(IntFlag):
+	RESMGR_CAP_DEFW = 1 << 0
 
 """
 Interface module for the Resource Manager

@@ -143,12 +143,12 @@ class DEFwResMgr:
 			del self.__clients_db[ep.name]
 		return
 
-	def get_info(self, db, service_filter):
+	def get_info(self, db, svc_name, svc_type, svc_caps):
 		for k, v in db.items():
 			if not v['info']:
 				continue
 
-			if not service_filter:
+			if svc_type == -1 and svc_caps == -1:
 				return v['info']
 
 			for i in v['info']:
@@ -169,12 +169,14 @@ class DEFwResMgr:
 	Raises:
 		DEFwCommError: If Resource Manager is not reachable
 	"""
-	def get_services(self, service_filter=''):
-		logging.debug(f"get_services({service_filter})")
+	#### TODO: Needs to be rewritten
+	def get_services(self, svc_name, svc_type=-1, svc_caps=-1):
+		logging.debug(f"get_services({svc_type}, {svc_caps})")
 		all_info = []
 		self.__reload_resources()
-		all_info += self.get_info(self.__active_services_db, service_filter)
-		all_info += self.get_info(self.__services_db, service_filter)
+		all_info += self.get_info(self.__active_services_db, svc_name, svc_type, svc_caps)
+		all_info += self.get_info(self.__services_db, svc_name, svc_type, svc_caps)
+		logging.debug(f"all_info({all_info})")
 		return all_info
 
 	"""
@@ -242,10 +244,16 @@ class DEFwResMgr:
 				raise DEFwReserveError(str(e))
 
 	def query(self):
-		from . import svc_info
-		cap = Capability(svc_info['name'], svc_info['description'], 1)
-		svc = ServiceDescr(svc_info['name'], svc_info['description'], [cap], 1)
+		from . import SERVICE_NAME, SERVICE_DESC
+		from api_resmgr import ResMgrType, ResMgrCapability
+		from defw_agent_info import get_bit_list, get_bit_desc, \
+									Capability, ServiceDescr, DEFwServiceInfo
+		t = get_bit_list(ResMgrType.RESMGR_TYPE_DEFW, ResMgrType)
+		c = get_bit_list(ResMgrCapability.RESMGR_CAP_DEFW, ResMgrCapability)
+		cap = Capability(ResMgrType.RESMGR_TYPE_DEFW,
+						ResMgrCapability.RESMGR_CAP_DEFW, get_bit_desc(t, c))
+		svc = ServiceDescr(SERVICE_NAME, SERVICE_DESC, cap, -1)
 		info = DEFwServiceInfo(self.__class__.__name__,
-						  self.__class__.__module__, [svc])
+							   self.__class__.__module__, [svc])
 		return info
 

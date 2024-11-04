@@ -49,7 +49,7 @@ def query_service_info(ep, name=None):
 	logging.debug(f"Got service infos: {svcs}")
 	if name:
 		for svc in svcs:
-			logging.debug(f"SVC info is {svc.get_name()} <-> {name}")
+			logging.debug(f"SVC info ---{type(svc)}--- is {svc.get_name()} <-> {name}")
 			if name == svc.get_name():
 				return svc
 		return []

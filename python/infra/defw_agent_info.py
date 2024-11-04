@@ -2,6 +2,19 @@ from defw_exception import DEFwOutOfResources
 from defw import me
 import logging
 
+def get_bit_list(bitstring, IntFlag_class):
+	str_list = list(IntFlag_class.__members__.keys())
+	set_list = []
+	idx = 0
+	for i in IntFlag_class.__members__.values():
+		if i & bitstring:
+			set_list.append(str_list[idx])
+		idx += 1
+	return set_list
+
+def get_bit_desc(b1, b2):
+	return f"{','.join(b1)} -> {','.join(b2)}"
+
 # This is what an agent (either a service or a client) needs to return
 # when queried about the services it offers:
 # DEFwServiceInfo contains a list of ServiceDescr
@@ -9,20 +22,18 @@ import logging
 # Each Capability describes a capacity it can handle
 #
 class Capability:
-	def __init__(self, capability_name, capability_description, capacity):
-		self.__capability_name = capability_name
-		self.__capability_description = capability_description
-		self.__capacity = capacity
+	def __init__(self, cap_type, cap_bitstr, cap_desc):
+		self.__cap_type = cap_type
+		self.__cap_bitstr = cap_bitstr
+		self.__cap_desc = cap_desc
 
 	def __repr__(self):
-		return f"Capbility(name={self.__capability_name}," \
-				f" description={self.__capability_description}," \
-				f" capacity={self.__capacity}"
+		return f"Capbility({self.__cap_desc})"
 
 	def get_capability_dict(self):
-		return {'name': self.__capability_name,
-				'description': self.__capability_description,
-				'capacity': self.__capacity}
+		return {'type': self.__cap_type,
+			    'caps': self.__cap_bitstr,
+				'description': self.__cap_desc}
 
 	def get_capability(self):
 		return self
@@ -42,8 +53,7 @@ class ServiceDescr:
 		return f"Service(name={self.__service_name}," \
 				f" description={self.__service_descr}," \
 				f" capabilities={self.__capabilities}," \
-				f" max capacity={self.__max_capacity}," \
-				f" available capacity={self.__max_capacity - self.__cur_capacity}"
+				f" max capacity={self.__max_capacity},"
 
 	def get_service_name(self):
 		return self.__service_name
@@ -53,7 +63,7 @@ class ServiceDescr:
 			return {'name': self.__service_name,
 					'description': self.__service_descr,
 					'capabilities': self.__capabilities,
-					'capacity': self.__max_reservation,
+					'capacity': self.__max_capacity,
 					'Owning Agent': self.__agent_descriptor}
 
 	def get_service(self, Sfilter=None):
@@ -71,7 +81,7 @@ class ServiceDescr:
 	def release_capacity(self):
 		if self.__cur_capacity == 0:
 			raise FIWOutOfResources(f"Release unreserved service {self.__service_name}")
-		self.__cur_capacity += 1
+		self.__cur_capacity -= 1
 
 class DEFwServiceInfo:
 	def __init__(self, name, mname, services):

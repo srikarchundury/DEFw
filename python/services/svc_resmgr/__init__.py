@@ -1,10 +1,14 @@
 from defw_util import prformat, fg, bg
-from .svc_resmgr import *
+from .svc_resmgr import DEFwResMgr
+
+SERVICE_NAME = 'ResMgr'
+SERVICE_DESC = 'DEFw Service Resource Manager'
 
 # This is used by the infrastructure to display information about
 # the service module
 svc_info = {'name': 'Resource Manager',
-			'description': 'Resource and Directory Service Manager Service',
+			'module': __name__,
+			'description': SERVICE_DESC,
 			'version': 1.0}
 
 # This is used by the infrastructure to define all the service classes.

@@ -5,13 +5,12 @@ import logging, uuid, time, queue, threading, logging, yaml
 from defw_exception import DEFwError, DEFwNotReady, DEFwInProgress
 import sys, os, re, math, psutil
 from defw_proc import Process
-
+from .svc_qrc import QRC
 sys.path.append(os.path.split(os.path.abspath(__file__))[0])
+print(os.path.split(os.path.abspath(__file__))[0])
 import qpm_common as common
 
 
-CID_COUNTER = 0
-QCR_VERBOSE = 1
 # Maximum number of processes per node
 MAX_PPN = 8
 # Maximum number of qubits per process
@@ -23,22 +22,6 @@ class CircuitStates:
 	DONE = 2
 	READY = 3
 	RUNNING = 4
-
-class QRCInstance:
-	STATUS_UNKNOWN = 1
-	STATUS_CONNECTED = 2
-
-	def __init__(self, pid, name, qrc=None):
-		self.instance = qrc
-		self.name = name
-		self.circuit_results = []
-		self.load = 0
-		self.pid = pid
-		self.status = QRCInstance.STATUS_UNKNOWN
-		self.ep = None
-
-	def add_qrc(self, qrc):
-		self.instance = qrc
 
 class Circuit:
 	def __init__(self, cid, info):
@@ -141,7 +124,8 @@ class QPM:
 		self.circuits = {}
 		self.runner_queue = queue.Queue()
 		self.circuit_results = []
-		self.qrc_rr = 0
+		logging.debug("Creating the QRC")
+		self.qrc = QRC()
 		self.free_hosts = {}
 		self.setup_host_resources()
 
@@ -206,7 +190,7 @@ class QPM:
 		return circ_result, all_stats
 
 	def create_circuit(self, info):
-		if not common.g_qpm_initialized:
+		if not common.qpm_initialized:
 			raise DEFwNotReady("QPM has not initialized properly")
 
 		cid = str(uuid.uuid4())
@@ -216,7 +200,7 @@ class QPM:
 		return cid
 
 	def delete_circuit(self, cid):
-		if not common.g_qpm_initialized:
+		if not common.qpm_initialized:
 			raise DEFwNotReady("QPM has not initialized properly")
 
 		if cid not in self.circuits:
@@ -266,10 +250,8 @@ class QPM:
 
 		circ.info['hosts'] = consumed_res
 		logging.debug(f"Circuit consumed: {consumed_res}")
-		qrc = common.QRC_list[self.qrc_rr % len(common.QRC_list)]
-		qrc.load += 1
-		self.qrc_rr += 1
-		circ.assigned_qrc = qrc
+		circ.assigned_qrc = self.qrc
+		circ.assigned_qrc.increment_load()
 
 	def free_resources(self, circ):
 		res = circ.info['hosts']
@@ -280,14 +262,14 @@ class QPM:
 				raise DEFwError("Returning more resources than originally had")
 			self.free_hosts[host] += res[host]
 		if circ.assigned_qrc:
-			circ.assigned_qrc.load -= 1
+			circ.assigned_qrc.decrement_load()
 		circ.set_done()
 		cid = circ.get_cid()
 		logging.debug(f"Deleting circuit {cid}")
 		self.delete_circuit(cid)
 
 	def common_run(self, cid):
-		self.read_all_qrc_cqs()
+		self.read_qrc_cqs()
 		circuit = self.circuits[cid]
 		self.consume_resources(circuit)
 		logging.debug(f"Running {cid}\n{circuit.info}")
@@ -330,13 +312,12 @@ class QPM:
 		return f"This is a test return for command with rc: {rc}", rc
 
 	def sync_run(self, cid):
-		if not common.g_qpm_initialized:
+		if not common.qpm_initialized:
 			raise DEFwNotReady("QPM has not initialized properly")
 
 		circuit = self.common_run(cid)
 		try:
-			logging.debug(f"qrc instance {circuit.assigned_qrc.instance}")
-			rc, output = circuit.assigned_qrc.instance.sync_run(cid, circuit.info)
+			rc, output = circuit.assigned_qrc.sync_run(cid, circuit.info)
 		except Exception as e:
 			self.free_resources(circuit)
 			raise e
@@ -351,104 +332,89 @@ class QPM:
 		#return rc, circ_result, stats
 
 	def async_run(self, cid):
-		if not common.g_qpm_initialized:
+		if not common.qpm_initialized:
 			raise DEFwNotReady("QPM has not initialized properly")
 
 		circuit = self.common_run(cid)
 
 		try:
-			circuit.assigned_qrc.instance.async_run(cid, circuit.info)
+			circuit.assigned_qrc.async_run(cid, circuit.info)
 		except Exception as e:
 			self.free_resources(circuit)
 			raise e
 
-	def read_all_qrc_cqs(self):
-		for qrc in common.QRC_list:
-			while (res := qrc.instance.read_cq()):
-				qrc.circuit_results.append(res)
-				logging.debug(f"{qrc.name} has {len(qrc.circuit_results)} pending results")
-				try:
-					circ = self.circuits[res['cid']]
-					self.free_resources(circ)
-				except Exception as e:
-					logging.debug(f"couldn't find cid: {res['cid']} in {self.circuits}")
-					raise e
+	def read_qrc_cqs(self):
+		while (res := self.qrc.read_cq()):
+			self.qrc.circuit_results.append(res)
+			logging.debug(f"QRC has {len(self.qrc.circuit_results)} pending results")
+			try:
+				circ = self.circuits[res['cid']]
+				self.free_resources(circ)
+			except Exception as e:
+				logging.debug(f"couldn't find cid: {res['cid']} in {self.circuits}")
+				raise e
 
 	def read_cq(self, cid=None):
-		if not common.g_qpm_initialized:
+		if not common.qpm_initialized:
 			raise DEFwNotReady("QPM has not initialized properly")
 
-		self.read_all_qrc_cqs()
-		if cid:
-			if cid not in self.circuits:
-				logging.error(f"request for untracked cid: {cid}")
-				raise DEFwNotFound(f"request for untracked cid: {cid}")
-			circ = self.circuits[cid]
-			qrc = circ.assigned_qrc
-			i = 0
-			for e in qrc.circuit_results:
-				if cid == e['cid']:
-					r = qrc.circuit_results.pop(i)
-					return r
-				i += 1
-		else:
-			for qrc in common.QRC_list:
-				if len(qrc.circuit_results) > 0:
-					r = qrc.circuit_results.pop(0)
-					logging.debug(f"Return Circuit Result: {r}")
-					return r
-		if cid:
-			raise DEFwInProgress(f"{cid} still in progress")
-		else:
-			raise DEFwInProgress("No ready QTs")
+		r = self.qrc.read_cq()
 
-	def peek_cq(self, cid=None):
-		if not common.g_qpm_initialized:
-			raise DEFwNotReady("QPM has not initialized properly")
+		if not r:
+			if cid:
+				raise DEFwInProgress(f"{cid} still in progress")
+			else:
+				raise DEFwInProgress("No ready QTs")
 
-		self.read_all_qrc_cqs()
-		if cid:
-			if cid not in self.circuits:
-				return None
-			circ = self.circuits[cid]
-			qrc = circ.assigned_qrc
-			i = 0
-			for e in qrc.circuit_results:
-				if cid == e['cid']:
-					return e
-				i += 1
-		else:
-			for qrc in common.QRC_list:
-				if len(qrc.circuit_results) > 0:
-					return qrc.circuit_results[0]
-		return None
-
-	def status(self, cid):
-		if not common.g_qpm_initialized:
-			raise DEFwNotReady("QPM has not initialized properly")
-
-		self.read_all_qrc_cqs()
-		r = {}
-		for cid, circ in self.circuits.items():
-			r[cid] = circ.status()
 		return r
 
-	def is_ready(self):
-		if not common.g_qpm_initialized:
+	def peek_cq(self, cid=None):
+		if not common.qpm_initialized:
 			raise DEFwNotReady("QPM has not initialized properly")
 
+		r = self.qrc.peak_cq()
+
+		if not r:
+			if cid:
+				raise DEFwInProgress(f"{cid} still in progress")
+			else:
+				raise DEFwInProgress("No ready QTs")
+
+		return r
+
+	def status(self, cid):
+		if not common.qpm_initialized:
+			raise DEFwNotReady("QPM has not initialized properly")
+
+		return self.qrc.status(cid)
+
+	def is_ready(self):
+		if not common.qpm_initialized:
+			raise DEFwNotReady("QPM has not initialized properly")
+
+		return True
+
 	def query(self):
-		from . import svc_info
-		cap = Capability(svc_info['name'], svc_info['description'], 1)
-		svc = ServiceDescr(svc_info['name'], svc_info['description'], [cap], 1)
+		from . import SERVICE_NAME, SERVICE_DESC
+		from api_qpm import QPMType, QPMCapability
+		from defw_agent_info import get_bit_list, get_bit_desc, \
+									Capability, ServiceDescr, DEFwServiceInfo
+		t = get_bit_list(QPMType.QPM_TYPE_SIMULATOR, QPMType)
+		c = get_bit_list(QPMCapability.QPM_CAP_TENSORNETWORK, QPMCapability)
+		cap = Capability(QPMType.QPM_TYPE_SIMULATOR,
+						QPMCapability.QPM_CAP_TENSORNETWORK, get_bit_desc(t, c))
+		svc = ServiceDescr(SERVICE_NAME, SERVICE_DESC, cap, -1)
 		info = DEFwServiceInfo(self.__class__.__name__,
-						  self.__class__.__module__, [svc])
+							   self.__class__.__module__, [svc])
 		return info
 
 	def reserve(self, svc, client_ep, *args, **kwargs):
 		logging.debug(f"{client_ep} reserved the {svc}")
 
 	def release(self, services=None):
+		if self.qrc:
+			self.qrc.shutdown()
+			self.qrc = None
 		pass
 
 	def schedule_shutdown(self, timeout=5):
@@ -458,6 +424,9 @@ class QPM:
 
 	def shutdown(self):
 		logging.debug("Scheduling QPM Shutdown")
+		if self.qrc:
+			self.qrc.shutdown()
+			self.qrc = None
 		ss = threading.Thread(target=self.schedule_shutdown, args=())
 		ss.start()
 
