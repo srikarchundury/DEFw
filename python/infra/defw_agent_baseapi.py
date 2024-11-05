@@ -27,16 +27,16 @@ class BaseAgentAPI(BaseRemote):
 	'''
 	reserve the svc passed in from the agent described by info
 	'''
-	def reserve(self, info, svc, client_ep, *args, **kwargs):
+	def reserve(self, svc_info, client_ep, *args, **kwargs):
 		from defw import services
-		class_name = info.get_name()
-		mod_name = info.get_module_name()
+		class_name = svc_info.get_class_name()
+		mod_name = svc_info.get_module_name()
 		if mod_name in services:
 			mod = services[mod_name]
 			for c in mod.service_classes:
 				if class_name == c.__class__.__name__:
 					obj = c()
-					return obj.reserve(svc, client_ep, *args, **kwargs)
+					return obj.reserve(svc_info, client_ep, *args, **kwargs)
 
 	def release(self, services):
 		prformat(fg.bold+fg.lightgrey+bg.red, "Client doesn't implement RELEASE API")
@@ -49,8 +49,8 @@ def query_service_info(ep, name=None):
 	logging.debug(f"Got service infos: {svcs}")
 	if name:
 		for svc in svcs:
-			logging.debug(f"SVC info ---{type(svc)}--- is {svc.get_name()} <-> {name}")
-			if name == svc.get_name():
+			logging.debug(f"SVC info ---{type(svc)}--- is {svc.get_service_name()} <-> {name}")
+			if name == svc.get_service_name():
 				return svc
 		return []
 	return svcs

@@ -398,14 +398,15 @@ class QPM:
 		from . import SERVICE_NAME, SERVICE_DESC
 		from api_qpm import QPMType, QPMCapability
 		from defw_agent_info import get_bit_list, get_bit_desc, \
-									Capability, ServiceDescr, DEFwServiceInfo
+									Capability, DEFwServiceInfo
 		t = get_bit_list(QPMType.QPM_TYPE_SIMULATOR, QPMType)
 		c = get_bit_list(QPMCapability.QPM_CAP_TENSORNETWORK, QPMCapability)
 		cap = Capability(QPMType.QPM_TYPE_SIMULATOR,
 						QPMCapability.QPM_CAP_TENSORNETWORK, get_bit_desc(t, c))
-		svc = ServiceDescr(SERVICE_NAME, SERVICE_DESC, cap, -1)
-		info = DEFwServiceInfo(self.__class__.__name__,
-							   self.__class__.__module__, [svc])
+		info = DEFwServiceInfo(SERVICE_NAME, SERVICE_DESC,
+							   self.__class__.__name__,
+							   self.__class__.__module__,
+							   cap, -1)
 		return info
 
 	def reserve(self, svc, client_ep, *args, **kwargs):

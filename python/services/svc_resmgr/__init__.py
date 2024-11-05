@@ -1,7 +1,7 @@
 from defw_util import prformat, fg, bg
 from .svc_resmgr import DEFwResMgr
 
-SERVICE_NAME = 'ResMgr'
+SERVICE_NAME = 'DEFwResMgr'
 SERVICE_DESC = 'DEFw Service Resource Manager'
 
 # This is used by the infrastructure to display information about

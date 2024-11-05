@@ -144,18 +144,18 @@ class DEFwResMgr:
 		return
 
 	def get_info(self, db, svc_name, svc_type, svc_caps):
+		r = []
 		for k, v in db.items():
 			if not v['info']:
 				continue
 
-			if svc_type == -1 and svc_caps == -1:
-				return v['info']
-
 			for i in v['info']:
-				if i.get_name() == service_filter:
-					return [i]
+				if i.is_match(svc_name, svc_type, svc_caps):
+					r.append(i)
+				else:
+					logging.debug(f"No match found with ({svc_name}, {svc_type}, {svc_caps}")
 
-		return []
+		return r
 
 	"""
 	List all available Agents in the DEFw Network
@@ -169,7 +169,6 @@ class DEFwResMgr:
 	Raises:
 		DEFwCommError: If Resource Manager is not reachable
 	"""
-	#### TODO: Needs to be rewritten
 	def get_services(self, svc_name, svc_type=-1, svc_caps=-1):
 		logging.debug(f"get_services({svc_type}, {svc_caps})")
 		all_info = []
@@ -199,12 +198,10 @@ class DEFwResMgr:
 			db_key = service_info.get_key()
 			if not db[db_key]['state'] & AGENT_STATE_REGISTERED:
 				DEFwReserveError(f"Agent {db_key} is not registered")
-			services = service_info.get_services()
-			for svc in services:
-				svc.consume_capacity()
+			service_info.consume_capacity()
 			api = db[db_key]['api']
 			try:
-				api.reserve(service_info, services, client_ep, *args, **kwargs)
+				api.reserve(service_info,  client_ep, *args, **kwargs)
 			except Exception as e:
 				raise DEFwReserveError(str(e))
 			ep = db[db_key]['agent'].get_ep()
@@ -247,13 +244,14 @@ class DEFwResMgr:
 		from . import SERVICE_NAME, SERVICE_DESC
 		from api_resmgr import ResMgrType, ResMgrCapability
 		from defw_agent_info import get_bit_list, get_bit_desc, \
-									Capability, ServiceDescr, DEFwServiceInfo
+									Capability, DEFwServiceInfo
 		t = get_bit_list(ResMgrType.RESMGR_TYPE_DEFW, ResMgrType)
 		c = get_bit_list(ResMgrCapability.RESMGR_CAP_DEFW, ResMgrCapability)
 		cap = Capability(ResMgrType.RESMGR_TYPE_DEFW,
 						ResMgrCapability.RESMGR_CAP_DEFW, get_bit_desc(t, c))
-		svc = ServiceDescr(SERVICE_NAME, SERVICE_DESC, cap, -1)
-		info = DEFwServiceInfo(self.__class__.__name__,
-							   self.__class__.__module__, [svc])
+		info = DEFwServiceInfo(SERVICE_NAME, SERVICE_DESC,
+							   self.__class__.__name__,
+							   self.__class__.__module__,
+							   cap, -1)
 		return info
 
