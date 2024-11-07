@@ -76,10 +76,10 @@ class DEFwServiceInfo:
 		t = self.__capabilities.get_cap_type()
 		c = self.__capabilities.get_caps()
 		if svc_type != -1:
-			if not (svc_type & t) == t:
+			if not (svc_type & t) == svc_type:
 				return False
 		if svc_caps != -1:
-			if not (svc_caps & c) == c:
+			if not (svc_caps & c) == svc_caps:
 				return False
 		return True
 

@@ -11,7 +11,7 @@ sys.path.append(os.path.split(os.path.abspath(__file__))[0])
 import qpm_common as common
 
 SERVICE_NAME = 'QPM'
-SERVICE_DESC = 'Quantum Platform Manager for TNQVM'
+SERVICE_DESC = 'Quantum Platform Manager for NW-QSIM'
 
 # This is used by the infrastructure to display information about
 # the service module. The name is also used as a key through out the

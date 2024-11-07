@@ -7,7 +7,6 @@ from defw_exception import DEFwError, DEFwExists, DEFwExecutionError, DEFwInProg
 import svc_launcher, cdefw_global
 
 sys.path.append(os.path.split(os.path.abspath(__file__))[0])
-print(os.path.split(os.path.abspath(__file__))[0])
 import qpm_common as common
 
 def dump_tmp_dir():
@@ -18,53 +17,6 @@ def dump_tmp_dir():
 				logger.info(f"  File: {os.path.join(root, file)}")
 	except:
 		pass
-
-class CircuitStates:
-	UNDEF = 0
-	READY = 1
-	RUNNING = 2
-	DONE = 3
-	FAIL = 4
-
-class Circuit:
-	def __init__(self, cid, info):
-		self.__state = CircuitStates.UNDEF
-		self.info = info
-		self.cid = cid
-
-	def getState(self):
-		return self.__state
-
-	def setState(self, state):
-		# State is monotonically increasing
-		if self.__state > state:
-			return False
-		self.__state = state
-		return True
-
-	def set_ready(self):
-		return self.setState(CircuitStates.READY)
-
-	def set_running(self):
-		return self.setState(CircuitStates.RUNNING)
-
-	def set_done(self):
-		return self.setState(CircuitStates.DONE)
-
-	def set_fail(self):
-		return self.setState(CircuitStates.FAIL)
-
-	def status(self):
-		if self.__state == CircuitStates.READY:
-			return 'READY'
-		if self.__state == CircuitStates.RUNNING:
-			return 'RUNNING'
-		if self.__state == CircuitStates.DONE:
-			return 'DONE'
-		if self.__state == CircuitStates.FAIL:
-			return 'FAIL'
-
-		return 'BUG'
 
 @contextlib.contextmanager
 def suppress_prints():
@@ -89,7 +41,6 @@ class QRC:
 
 	def __init__(self, start=True):
 		self.__load = 0
-		self.circuits = {}
 		self.circuit_results_lock = threading.Lock()
 		self.worker_pool_lock = threading.Lock()
 		self.circuit_results = []
@@ -112,13 +63,7 @@ class QRC:
 		common.qpm_shutdown = True
 		with self.worker_pool_lock:
 			for k, v in self.worker_pool.items():
-				v['queue'].put(-1)
-
-	def increment_load(self):
-		self.__load += 1
-
-	def decrement_load(self):
-		self.__load -= 1
+				v['queue'].put(None)
 
 	def is_colocated_dvm(self):
 		import psutil
@@ -145,8 +90,8 @@ class QRC:
 				raise e
 			logging.debug(f"{task_info} completed")
 			complete.append(task_info)
-			cid = task_info['cid']
-			circ = self.circuits[cid]
+			circ = task_info['circ']
+			cid = circ.get_cid()
 			qasm_file = task_info['qasm_file']
 			if not rc:
 				logging.debug(f"Circuit {cid} successful")
@@ -156,7 +101,7 @@ class QRC:
 						output = f.read()
 						output = yaml.safe_load(output)
 					os.remove(output_file)
-					self.circuits[cid].set_done()
+					circ.set_exec_done()
 				except Exception as e:
 					output = "{result: missing, exception: "+ f"{e}" + "}"
 					circ.set_fail()
@@ -193,8 +138,8 @@ class QRC:
 		while not common.qpm_shutdown:
 			empty = False
 			try:
-				cid = my_queue.get(timeout=1)
-				if cid == -1:
+				circ = my_queue.get(timeout=1)
+				if circ == None:
 					common.qpm_shutdown = True
 					continue
 			except queue.Empty:
@@ -206,7 +151,7 @@ class QRC:
 				result = None
 				pid = -1
 				try:
-					task_info = self.run_circuit_async(cid)
+					task_info = self.run_circuit_async(circ)
 				except Exception as e:
 					result = e
 					rc = -1
@@ -215,42 +160,13 @@ class QRC:
 					with self.worker_pool_lock:
 						self.worker_pool[my_id]['state'] = QRC.THREAD_STATE_FREE
 				if result:
-					r = {'cid': cid, 'result': result, 'rc': rc}
+					r = {'cid': circ.get_cid(), 'result': result, 'rc': rc}
 					logging.debug(f"Problem with circuit {cid} appending result {r}")
 					with self.circuit_results_lock:
 						self.circuit_results.append(r)
 						logging.debug(f"{len(self.circuit_results)} pending results")
 				else:
 					self.worker_pool[my_id]['active_tasks'].append(task_info)
-
-	def runner_sync(self, my_id):
-		with self.worker_pool_lock:
-			if my_id not in self.worker_pool:
-				logging.debug(f"{my_id}: A worker thread is not part of the pool")
-			my_queue = self.worker_pool[my_id]['queue']
-		logging.debug(f"starting QRC main loop for {my_id}")
-		while not common.qpm_shutdown:
-			try:
-				cid = my_queue.get(timeout=1)
-				if cid == -1:
-					common.qpm_shutdown = True
-					continue
-			except queue.Empty:
-				continue
-			exception = None
-			try:
-				rc, result = self.run_circuit(cid)
-			except Exception as e:
-				result = e
-				rc = -1
-				pass
-			with self.worker_pool_lock:
-				self.worker_pool[my_id]['state'] = QRC.THREAD_STATE_FREE
-			r = {'cid': cid, 'result': result, 'rc': rc}
-			logging.debug(f"Circuit {cid} completed with result {r}")
-			with self.circuit_results_lock:
-				self.circuit_results.append(r)
-				logging.debug(f"{len(self.circuit_results)} pending results")
 
 	def read_cq(self, cid=None):
 		if cid:
@@ -260,7 +176,6 @@ class QRC:
 				for e in self.circuit_results:
 					if cid == e['cid']:
 						r = self.circuit.pop(i)
-						del(self.circuits[cid])
 						return r
 					i += 1
 		else:
@@ -268,7 +183,6 @@ class QRC:
 				logging.debug(f"read_cq for top: {len(self.circuit_results)}")
 				if len(self.circuit_results) > 0:
 					r = self.circuit_results.pop(0)
-					del(self.circuits[r['cid']])
 					return r
 		return None
 
@@ -287,15 +201,6 @@ class QRC:
 				if len(self.circuit_results) > 0:
 					return self.circuit_results[0]
 		return None
-
-	def create_circuit(self, cid, info):
-		if cid not in self.circuits.keys():
-			self.circuits[cid] = Circuit(cid, info)
-		else:
-			raise DEFwExists(f"{cid} already exists")
-
-	def status(self, cid):
-		return self.circuits[cid].status()
 
 	def import_module_util(self):
 		try:
@@ -386,14 +291,14 @@ class QRC:
 # --prtemca ras_base_verbose 50
 		return cmd
 
-	def run_circuit_async(self, cid):
+	def run_circuit_async(self, circ):
 		# check that we can run on CXI
 		if "SLINGSHOT_VNIS" in os.environ:
 			logging.debug(f"Found SLINGSHOT_VNIS: {os.environ['SLINGSHOT_VNIS']}")
 		else:
 			logging.critical(f"Didn't find SLINGSHOT_VNIS")
 
-		circ = self.circuits[cid]
+		cid = circ.get_cid()
 
 		#self.load_modules(circ.info["modules"])
 
@@ -427,7 +332,7 @@ class QRC:
 			logging.critical(f"Failed to launch {cmd}")
 			raise e
 
-		task_info['cid'] = cid
+		task_info['circ'] = circ
 		task_info['qasm_file'] = qasm_file
 		task_info['launcher'] = launcher
 		task_info['pid'] = pid
@@ -443,14 +348,14 @@ class QRC:
 #		return stdout, stderr, rc
 #		#return "out", "err", rc
 
-	def run_circuit(self, cid):
+	def run_circuit(self, circ):
 		# check that we can run on CXI
 		if "SLINGSHOT_VNIS" in os.environ:
 			logging.debug(f"Found SLINGSHOT_VNIS: {os.environ['SLINGSHOT_VNIS']}")
 		else:
 			logging.critical(f"Didn't find SLINGSHOT_VNIS")
 
-		circ = self.circuits[cid]
+		cid = circ.get_cid()
 
 		#self.load_modules(circ.info["modules"])
 
@@ -492,7 +397,7 @@ class QRC:
 					output = f.read()
 					output = yaml.safe_load(output)
 				os.remove(output_file)
-				circ.set_done()
+				circ.set_exec_done()
 			except Exception as e:
 				output = "{result: missing, exception: "+ f"{e}"
 			return 0, output
@@ -503,33 +408,21 @@ class QRC:
 		logging.debug(error_str)
 		raise DEFwExecutionError(error_str)
 
-	def sync_run(self, cid, info):
-		self.create_circuit(cid, info)
-		return self.run_circuit(cid)
+	def sync_run(self, circ):
+		return self.run_circuit(circ)
 
-	def async_run(self, cid, info):
-		self.create_circuit(cid, info)
+	def async_run(self, circ):
+		cid = circ.get_cid()
 		with self.worker_pool_lock:
 			for k, v in self.worker_pool.items():
 				if v['state'] == QRC.THREAD_STATE_FREE and \
 				   v['queue'].qsize() < QRC.MAX_NUM_WORKER_TASKS:
-					v['queue'].put(cid)
+					v['queue'].put(circ)
 					if v['queue'].qsize() >= QRC.MAX_NUM_WORKER_TASKS:
 						v['state'] = QRC.THREAD_STATE_BUSY
 					return cid
 				elif v['state'] == QRC.THREAD_STATE_BUSY:
 					raise DEFwOutOfResources(f"No more resource to run {cid}")
-
-	def async_run_old(self, cid, info):
-		self.create_circuit(cid, info)
-		with self.worker_pool_lock:
-			for k, v in self.worker_pool.items():
-				if v['state'] == QRC.THREAD_STATE_FREE:
-					v['state'] = QRC.THREAD_STATE_BUSY
-					v['queue'].put(cid)
-					return cid
-		#TODO: find the one with the shortest queue
-		self.worker_pool[0]['queue'].put(cid)
 
 	def shutdown(self):
 		common.qpm_shutdown = True

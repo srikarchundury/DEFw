@@ -31,6 +31,7 @@ class Circuit:
 		self.__cid = cid
 		self.info = info
 		self.setup_circuit_run_details()
+		self.exec_time = -1
 
 	def setup_circuit_run_details(self):
 		# TODO: Make MPI configuration decisions based
@@ -105,6 +106,9 @@ class Circuit:
 
 	def set_done(self):
 		return self.set_state(CircuitStates.DONE)
+
+	def set_fail(self):
+		return self.set_state(CircuitStates.FAIL)
 
 	def can_delete(self):
 		if self.__state <= CircuitStates.READY:
@@ -320,6 +324,7 @@ class QPM:
 			self.free_resources(circuit)
 			raise e
 		self.free_resources(circuit)
+		logging.debug(f"circuit {circuit.get_cid()} took {circuit.exec_time}s")
 		return rc, output
 		#circ_result, stats = self.parse_result(output.decode('utf-8'))
 		# TODO: Where is the best place to parse the results. Current
@@ -386,8 +391,8 @@ class QPM:
 		from api_qpm import QPMType, QPMCapability
 		from defw_agent_info import get_bit_list, get_bit_desc, \
 									Capability, DEFwServiceInfo
-		type_bits = QPMType.QPM_TYPE_TNQVM | QPMType.QPM_TYPE_SIMULATOR
-		caps_bits = QPMCapability.QPM_CAP_TENSORNETWORK
+		type_bits = QPMType.QPM_TYPE_NWQSIM | QPMType.QPM_TYPE_SIMULATOR
+		caps_bits = QPMCapability.QPM_CAP_STATEVECTOR
 		t = get_bit_list(type_bits, QPMType)
 		c = get_bit_list(caps_bits, QPMCapability)
 		cap = Capability(type_bits, caps_bits, get_bit_desc(t, c))

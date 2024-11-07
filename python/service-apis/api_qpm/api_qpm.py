@@ -1,10 +1,14 @@
 from defw_remote import BaseRemote
 from enum import IntFlag
 
+VERSION = 0.1
+
 class QPMType(IntFlag):
 	QPM_TYPE_HARDWARE = 1 << 0
 	QPM_TYPE_SIMULATOR = 1 << 1
 	QPM_TYPE_QB = 1 << 2
+	QPM_TYPE_TNQVM = 1 << 3
+	QPM_TYPE_NWQSIM = 1 << 4
 
 class QPMCapability(IntFlag):
 	QPM_CAP_TENSORNETWORK = 1 << 0
