@@ -23,7 +23,9 @@ def defw_reserve_service_by_name(resmgr, svc_name, svc_type = -1,
 		sleep(1)
 
 	if len(service_infos) == 0:
-		raise DEFwReserveError(f"Couldn't connect to a {svc_name}")
+		raise DEFwReserveError(f"Couldn't connect to a {svc_name}, {svc_type}, {svc_cap}")
+
+	logging.debug(f"Received service_infos: {service_infos}")
 
 	svc_apis = defw.connect_to_resource(service_infos, svc_name)
 

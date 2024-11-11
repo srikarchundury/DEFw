@@ -116,6 +116,6 @@ class DEFwServiceInfo:
 
 	def __repr__(self):
 		return f"Service Info(name={self.__service_name}, " \
-				"Residence={self.__my_ep}, caps={self.__capabilities}"
+			   f"Residence={self.__my_ep}, caps={self.__capabilities}"
 
 

@@ -1270,7 +1270,10 @@ def connect_to_resource(service_infos, res_name):
 	for service_info in service_infos:
 		class_obj = getattr(service_apis[res_name], res_name)
 		api = class_obj(service_info)
+		logging.debug(f"API created: {res_name}: {api}")
 		apis.append(api)
+
+	logging.debug(f"Returning API array: {apis}")
 	return apis
 
 def wait_resmgr(timeout):

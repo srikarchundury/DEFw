@@ -170,7 +170,7 @@ class DEFwResMgr:
 		DEFwCommError: If Resource Manager is not reachable
 	"""
 	def get_services(self, svc_name, svc_type=-1, svc_caps=-1):
-		logging.debug(f"get_services({svc_type}, {svc_caps})")
+		logging.debug(f"get_services({svc_name}, {svc_type}, {svc_caps})")
 		all_info = []
 		self.__reload_resources()
 		all_info += self.get_info(self.__active_services_db, svc_name, svc_type, svc_caps)
