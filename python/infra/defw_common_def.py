@@ -13,9 +13,11 @@ AGENT_DAEMON_PORT = 8094
 DEFW_SCRIPT_PATHS = ['src/',
 		     'python/',
 		     'python/service-apis',
+		     'python/service-apis/util',
 		     'python/services',
+		     'python/services/util',
 		     'python/infra',
-		     'python/config',
+		     'python/config'
 		     'python/experiments']
 MIN_IFS_NUM_DEFAULT = 3
 g_system_shutdown = False

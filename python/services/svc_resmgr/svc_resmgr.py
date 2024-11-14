@@ -146,6 +146,7 @@ class DEFwResMgr:
 	def get_info(self, db, svc_name, svc_type, svc_caps):
 		r = []
 		for k, v in db.items():
+			logging.debug(f"examinging {k}, {v}")
 			if not v['info']:
 				continue
 

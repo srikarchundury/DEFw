@@ -71,15 +71,20 @@ class DEFwServiceInfo:
 		return self.__class_name
 
 	def is_match(self, svc_name, svc_type, svc_caps):
+		logging.debug(f"is_match {svc_name} <-> {self.__service_name}")
 		if svc_name != self.__service_name:
 			return False
 		t = self.__capabilities.get_cap_type()
 		c = self.__capabilities.get_caps()
+		logging.debug(f"is_match {bin(t)} <-> {bin(svc_type)}")
+		logging.debug(f"is_match {bin(c)} <-> {bin(svc_caps)}")
 		if svc_type != -1:
 			if not (svc_type & t) == svc_type:
+				logging.debug("is_match didn't match svc_type")
 				return False
 		if svc_caps != -1:
 			if not (svc_caps & c) == svc_caps:
+				logging.debug("is_match didn't match svc_caps")
 				return False
 		return True
 

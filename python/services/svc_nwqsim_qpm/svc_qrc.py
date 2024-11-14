@@ -293,11 +293,7 @@ class QRC:
 		import shutil
 		info = circ.info
 
-		try:
-			nwqsim_executable = shutil.which(info['qfw_nwqsim_executable_path'])
-		except:
-			logging.debug(f"bin path = {os.environ['QFW_BIN_PATH']}")
-			nwqsim_executable = os.path.join(os.environ['QFW_BIN_PATH'], "nwq_qasm")
+		nwqsim_executable = shutil.which(info['qfw_backend'])
 		gpuwrapper = shutil.which("gpuwrapper.sh")
 
 		if not nwqsim_executable or not gpuwrapper:

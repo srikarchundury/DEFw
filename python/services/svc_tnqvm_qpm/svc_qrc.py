@@ -232,12 +232,14 @@ class QRC:
 
 		info = circ.info
 
+		logging.debug(f"Circuit Info = {info}")
+
 		if 'compiler' not in info:
 			compiler = 'staq'
 		else:
 			compiler = info['compiler']
 
-		circuit_runner = shutil.which(info['qfw_circuit_runner_path'])
+		circuit_runner = shutil.which(info['qfw_backend'])
 		gpuwrapper = shutil.which("gpuwrapper.sh")
 
 		if not circuit_runner or not gpuwrapper:

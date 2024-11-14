@@ -6,9 +6,7 @@ import cdefw_global
 import defw
 import sys, os, threading, logging
 from time import sleep
-
-sys.path.append(os.path.split(os.path.abspath(__file__))[0])
-import qpm_common as common
+import util.qpm.util_qpm as uq
 
 SERVICE_NAME = 'QPM'
 SERVICE_DESC = 'Quantum Platform Manager for TNQVM'
@@ -30,20 +28,20 @@ svc_info = {'name': SERVICE_NAME,
 service_classes = [QPM]
 
 def qpm_complete_init():
-	common.qpm_initialized = True
+	uq.qpm_initialized = True
 	logging.debug("QPM Initialized Successfully")
 
 def qpm_wait_resmgr():
-	while not defw.resmgr and not common.qpm_shutdown:
+	while not defw.resmgr and not uq.qpm_shutdown:
 		logging.debug("still waiting for resmgr to come up")
 		sleep(1)
-	if not common.qpm_shutdown:
+	if not uq.qpm_shutdown:
 		qpm_complete_init()
 
 def initialize():
 	global g_timeout
 
-	if common.qpm_initialized:
+	if uq.qpm_initialized:
 		return
 
 	try:
@@ -61,6 +59,6 @@ def initialize():
 	qpm_complete_init()
 
 def uninitialize():
-	common.qpm_shutdown = True
+	uq.qpm_shutdown = True
 
 	logging.debug("QPM shutdown")
