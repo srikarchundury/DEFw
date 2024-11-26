@@ -349,11 +349,14 @@ class WorkerThread:
 				if me.is_resmgr() and class_name == 'DEFwResMgr':
 					common.add_to_class_db(defw.resmgr, class_id)
 				else:
-					my_class = getattr(module, class_name)
-					# TODO: Instantiating a class can result in a blockinh
-					# call
-					instance = my_class(*args, **kwargs)
-					common.add_to_class_db(instance, class_id)
+					try:
+						instance = common.get_class_from_db(class_id)
+					except:
+						my_class = getattr(module, class_name)
+						# TODO: Instantiating a class can result in a blockinh
+						# call
+						instance = my_class(*args, **kwargs)
+						common.add_to_class_db(instance, class_id)
 			elif rpc_type == 'destroy_class':
 				logging.debug(f'remote call to destroy class {class_name}')
 				if me.is_resmgr() and class_name == 'DEFwResMgr':

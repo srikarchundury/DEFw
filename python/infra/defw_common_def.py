@@ -53,6 +53,7 @@ def get_class_from_db(class_id):
 	if class_id in global_class_db:
 		return global_class_db[class_id]
 	logging.debug(f"Request for class not in the database {class_id}")
+	raise DEFwNotFound(f'no {class_id} in database')
 
 def del_entry_from_class_db(class_id):
 	if class_id in global_class_db:
