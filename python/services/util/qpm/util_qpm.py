@@ -10,20 +10,21 @@ qpm_initialized = False
 qpm_shutdown = False
 
 class UTIL_QPM:
-	def __init__(self, qrc, start=True):
+	def __init__(self, qrc, max_ppn=MAX_PPN, start=True):
 		self.circuits = {}
 		self.runner_queue = queue.Queue()
 		self.circuit_results = []
 		self.qrc = qrc
 		self.free_hosts = {}
-		self.setup_host_resources()
+		self.max_ppn = max_ppn
+		self.setup_host_resources(max_ppn)
 
-	def setup_host_resources(self):
+	def setup_host_resources(self, max_ppn):
 		hl = expand_host_list(os.environ['QFW_QPM_ASSIGNED_HOSTS'])
 		for h in hl:
 			comp = h.split(':')
 			if len(comp) == 1:
-				self.free_hosts[comp[0]] = MAX_PPN
+				self.free_hosts[comp[0]] = max_ppn
 			elif len(comp) == 2:
 				self.free_hosts[comp[0]] = int(comp[1])
 
@@ -56,7 +57,7 @@ class UTIL_QPM:
 	def consume_resources(self, circ):
 		info = circ.info
 		np = info['np']
-		num_hosts = int(np / MAX_PPN)
+		num_hosts = int(np / self.max_ppn)
 		if not num_hosts:
 			num_hosts = 1
 
@@ -98,7 +99,7 @@ class UTIL_QPM:
 		for host in res.keys():
 			if host not in self.free_hosts:
 				raise DEFwError(f"Circuit has untracked host: {host}")
-			if res[host] + self.free_hosts[host] > MAX_PPN:
+			if res[host] + self.free_hosts[host] > self.max_ppn:
 				raise DEFwError("Returning more resources than originally had")
 			self.free_hosts[host] += res[host]
 		circ.set_done()
@@ -112,29 +113,35 @@ class UTIL_QPM:
 		logging.debug(f"Running {cid}\n{circuit.info}")
 		return circuit
 
-	def sync_run(self, cid):
+	def sync_run(self, cid, common_run=None):
 		global qpm_initialized
+
+		if not common_run:
+			common_run = self.common_run
 
 		if not qpm_initialized:
 			raise DEFwNotReady("QPM has not initialized properly")
 
-		circuit = self.common_run(cid)
+		circuit = common_run(cid)
 		try:
 			rc, output = self.qrc.sync_run(circuit)
 		except Exception as e:
 			self.free_resources(circuit)
 			raise e
 		self.free_resources(circuit)
-		logging.debug(f"circuit {circuit.get_cid()} took {circuit.exec_time}s")
+		logging.debug(f"circuit {circuit.get_cid()} completed with {rc} and output {output}")
 		return rc, output
 
-	def async_run(self, cid):
+	def async_run(self, cid, common_run=None):
 		global qpm_initialized
+
+		if not common_run:
+			common_run = self.common_run
 
 		if not qpm_initialized:
 			raise DEFwNotReady("QPM has not initialized properly")
 
-		circuit = self.common_run(cid)
+		circuit = common_run(cid)
 
 		try:
 			self.qrc.async_run(circuit)
@@ -222,8 +229,8 @@ class UTIL_QPM:
 		if self.qrc:
 			self.qrc.shutdown()
 			self.qrc = None
-		ss = threading.Thread(target=self.schedule_shutdown, args=())
-		ss.start()
+		#ss = threading.Thread(target=self.schedule_shutdown, args=())
+		#ss.start()
 
 	def test(self):
 		return "****UTIL QPM Test Successful****"

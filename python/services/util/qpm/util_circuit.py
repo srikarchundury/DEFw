@@ -7,6 +7,15 @@ MAX_PPN = 8
 # Maximum number of qubits per process
 MAX_QUBITS_PP = 10
 
+def set_max_ppn(ppn):
+	global MAX_PPN
+	MAX_PPN = ppn
+
+def set_max_qubits_pp(max_qubits):
+	global MAX_QUBITS_PP
+	logging.debug(f"set_max_qubits_pp({max_qubits})")
+	MAX_QUBITS_PP = max_qubits
+
 class CircuitStates:
 	UNDEF = 0
 	MARKED_FOR_DELETION = 1
@@ -21,10 +30,11 @@ class Circuit:
 		self.__state = CircuitStates.UNDEF
 		self.__cid = cid
 		self.info = info
-		self.setup_circuit_run_details()
+		logging.debug(f"max_qubits supported on this circuit: {MAX_QUBITS_PP}")
+		self.setup_circuit_run_details(MAX_QUBITS_PP)
 		self.exec_time = -1
 
-	def setup_circuit_run_details(self):
+	def setup_circuit_run_details(self, max_qubits):
 		# TODO: Make MPI configuration decisions based
 		# on the circuit meta data
 
@@ -63,7 +73,7 @@ class Circuit:
 				f"file:{os.environ['QFW_DVM_URI_PATH']}"
 
 		# each 10 qubits requires 1 node added to the simulation
-		np = round_half_up(self.info['num_qubits'] / MAX_QUBITS_PP)
+		np = round_half_up(self.info['num_qubits'] / max_qubits)
 		if np < 1:
 			np = 1
 		else:
