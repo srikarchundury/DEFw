@@ -29,7 +29,7 @@ class Process:
 		return f"Process(pid={self.__pid}, {self.__process}, env={self.__appended_env})"
 
 	def launch(self):
-		cmd = " ".join(self.__cmd)
+#		cmd = " ".join(self.__cmd)
 		try:
 #			self.__process = subprocess.Popen(cmd, env=self.__env,
 #							stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -86,6 +86,7 @@ class Launcher:
 		self.__proc_dict = {}
 		self.__dead_procs = {}
 		common.shutdown = False
+		self.__lock_db = threading.Lock()
 		self.__monitor_thr = threading.Thread(target=self.monitor_thr)
 		self.__monitor_thr.start()
 
@@ -93,17 +94,19 @@ class Launcher:
 		logging.debug(f"Starting monitor_thr {common.shutdown}")
 		while not common.shutdown:
 			logging.debug("monitor_thr started")
-			for pid, proc in self.__proc_dict.items():
-				exists = psutil.pid_exists(pid)
-				logging.debug(f"Examining -- {pid}:{proc}:{exists}:{proc.poll()}")
-				if proc.poll() is not None:
-					logging.debug(f"{pid} terminated with rc {proc.returncode()}")
-					stdout, stderr, rc = proc.get_result()
-					proc.kill()
-					self.__dead_procs[pid] = (stdout, stderr, rc)
+			with self.__lock_db:
+				for pid, proc in self.__proc_dict.items():
+					exists = psutil.pid_exists(pid)
+					logging.debug(f"Examining -- {pid}:{proc}:{exists}:{proc.poll()}")
+					if proc.poll() is not None:
+						logging.debug(f"{pid} terminated with rc {proc.returncode()}")
+						stdout, stderr, rc = proc.get_result()
+						proc.kill()
+						self.__dead_procs[pid] = (stdout, stderr, rc)
 			for pid in self.__dead_procs.keys():
-				if pid in self.__proc_dict.keys():
-					del self.__proc_dict[pid]
+				with self.__lock_db:
+					if pid in self.__proc_dict.keys():
+						del self.__proc_dict[pid]
 			sleep(1)
 		logging.debug("Monitor thread 2 shutdown")
 
@@ -136,7 +139,8 @@ class Launcher:
 		# if we're going to wait for it keep it around until we get
 		# the result
 		proc.launch()
-		self.__proc_dict[proc.getpid()] = proc
+		with self.__lock_db:
+			self.__proc_dict[proc.getpid()] = proc
 		pid = proc.getpid()
 		if not wait:
 			return pid
@@ -145,7 +149,8 @@ class Launcher:
 		output, error, rc = proc.get_result()
 		if rc:
 			proc.kill()
-		del self.__proc_dict[pid]
+		with self.__lock_db:
+			del self.__proc_dict[pid]
 #		while True:
 #			rc = proc.poll()
 #			if rc:
@@ -155,14 +160,16 @@ class Launcher:
 		return output, error, rc
 
 	def kill(self, pid):
-		if pid in self.__proc_dict.keys():
-			self.__proc_dict[pid].kill()
-			del self.__proc_dict[pid]
+		with self.__lock_db:
+			if pid in self.__proc_dict.keys():
+				self.__proc_dict[pid].kill()
+				del self.__proc_dict[pid]
 
 	def terminate(self, pid):
-		if pid in self.__proc_dict.keys():
-			self.__proc_dict[pid].kill()
-			del self.__proc_dict[pid]
+		with self.__lock_db:
+			if pid in self.__proc_dict.keys():
+				self.__proc_dict[pid].kill()
+				del self.__proc_dict[pid]
 
 	def status(self, pid):
 		if pid in self.__dead_procs.keys():
@@ -174,11 +181,12 @@ class Launcher:
 	def shutdown(self, keep=False):
 		rm_pid = []
 		if not keep:
-			for pid, proc in self.__proc_dict.items():
-				proc.kill()
-				rm_pid.append(pid)
-			for pid in rm_pid:
-				del self.__proc_dict[pid]
+			with self.__lock_db:
+				for pid, proc in self.__proc_dict.items():
+					proc.kill()
+					rm_pid.append(pid)
+				for pid in rm_pid:
+					del self.__proc_dict[pid]
 		logging.debug("Launcher Service shutdown requested")
 		common.shutdown = True
 		self.__monitor_thr.join()
@@ -186,22 +194,23 @@ class Launcher:
 	def blocking_wait(self, pid=-1):
 		while True:
 			logging.debug(f"Waiting on pid {pid}")
-			if pid == -1:
-				if len(self.__proc_dict) == 0:
-					break;
-				rm_pid = []
-				for pid, proc in self.__proc_dict.items():
-					if proc.poll():
-						rm_pid.append(pid)
-				for pid in rm_pid:
-					del self.__proc_dict[pid]
-			else:
-				if pid in self.__proc_dict.keys() and \
-				   self.__proc_dict[pid].poll():
-					logging.debug(f"PID {pid} exited")
-					self.__proc_dict[pid].terminate()
-					del self.__proc_dict[pid]
-					break
+			with self.__lock_db:
+				if pid == -1:
+					if len(self.__proc_dict) == 0:
+						break;
+					rm_pid = []
+					for pid, proc in self.__proc_dict.items():
+						if proc.poll():
+							rm_pid.append(pid)
+					for pid in rm_pid:
+						del self.__proc_dict[pid]
+				else:
+					if pid in self.__proc_dict.keys() and \
+					self.__proc_dict[pid].poll():
+						logging.debug(f"PID {pid} exited")
+						self.__proc_dict[pid].terminate()
+						del self.__proc_dict[pid]
+						break
 			sleep(1)
 		logging.debug("launcher.blocking_wait() completed")
 
