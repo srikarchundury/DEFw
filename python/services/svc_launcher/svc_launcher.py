@@ -114,14 +114,21 @@ class Launcher:
 		# Start the DVM on the second node in the Simulation Environment
 		# because currently MPI can not co-exist on the DVM's head node.
 		# Our launcher will live on node 0
-		cmd = "; ".join([f"export {var_name}={var_value}" \
-			for var_name, var_value in env.items()]) + ';'
-		for u in use.split(':'):
-			cmd += f"module use {u};"
-		for m in modules.split(':'):
-			cmd += f"module load {m};"
-		cmd += f"source {python_env}"
-		cmd += f"; {exe}"
+		cmd = ''
+		if env:
+			cmd = "; ".join([f"export {var_name}={var_value}" \
+				for var_name, var_value in env.items()]) + ';'
+		if use and modules:
+			for u in use.split(':'):
+				cmd += f"module use {u};"
+			for m in modules.split(':'):
+				cmd += f"module load {m};"
+		if python_env:
+			cmd += f"source {python_env};"
+		if cmd:
+			cmd += f" {exe}"
+		else:
+			cmd = exe
 		return cmd
 
 	def run_cmd_on_target(self, exe, env, use, modules, python_env, target):
