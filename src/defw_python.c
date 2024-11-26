@@ -99,10 +99,6 @@ static defw_rc_t python_setup(void)
 		"sys.path.append(os.path.join('%s', 'src'))", infra);
 	RUN_PYTHON_CMD(buf);
 
-	snprintf(buf, sizeof(buf),
-		 "f = open('/tmp/ashehata', 'a'); f.write(str(sys.path)); f.close()");
-	RUN_PYTHON_CMD(buf);
-
 	RUN_PYTHON_CMD("import defw\n");
 	RUN_PYTHON_CMD("from defw import me,experiments,"
 		"services,service_apis,client_agents,service_agents,"
