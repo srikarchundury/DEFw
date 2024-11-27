@@ -53,6 +53,7 @@ def initialize():
 		# we haven't connected to the resmgr yet. Spin up a thread and
 		# wait for it to connect before finishing up the initialization
 		svc_qpm_thr = threading.Thread(target=qpm_wait_resmgr, args=())
+		svc_qpm_thr.daemon = True
 		svc_qpm_thr.start()
 		return
 

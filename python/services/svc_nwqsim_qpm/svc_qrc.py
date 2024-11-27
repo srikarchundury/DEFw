@@ -57,6 +57,7 @@ class QRC:
 										   'active_tasks': [],
 										   'queue': queue.Queue(),
 										   'state': QRC.THREAD_STATE_FREE}
+					runner.daemon = True
 					runner.start()
 
 	def __del__(self):

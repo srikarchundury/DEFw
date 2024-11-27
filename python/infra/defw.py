@@ -9,6 +9,7 @@ import cdefw_global
 from defw_agent import DEFwClientAgents, DEFwServiceAgents, \
 	 DEFwActiveClientAgents, DEFwActiveServiceAgents, Endpoint
 import netifaces, random
+import atexit
 import os, subprocess, sys, yaml, fnmatch, logging, csv, uuid, io
 import shutil, traceback, datetime, re, copy, threading, queue, time
 from defw_util import prformat, fg, bg, generate_random_string, \
@@ -842,6 +843,9 @@ class ExpSuites(Suites):
 		super().__init__(os.path.join(defw_path, "python", "experiments"), prefix="exp_",
 						 suite_prefix='exp_')
 
+import builtins
+_original_exit = builtins.exit
+
 class Myself:
 	'''
 	Class which represents this DEFw instance.
@@ -923,6 +927,8 @@ class Myself:
 		'''
 		Shutdown the DEFw
 		'''
+		global _original_exit
+
 		services.finalize()
 		service_apis.finalize()
 		common.system_shutdown()
@@ -934,7 +940,7 @@ class Myself:
 		from defw_telnet_sr import g_tns
 		if g_tns:
 			g_tns.stop()
-		exit()
+		_original_exit()
 
 	def get_cpuinfo(self):
 		return self.__cpuinfo
@@ -1357,6 +1363,9 @@ if not cdefw_global.get_defw_initialized():
 	set_logging_level('debug')
 
 	updater_thread = threading.Thread(target=updater_thread, args=())
+	updater_thread.daemon = True
 	updater_thread.start()
+
+	builtins.exit = me.exit
 
 	cdefw_global.set_defw_initialized(True)

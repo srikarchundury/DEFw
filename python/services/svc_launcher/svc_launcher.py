@@ -88,6 +88,7 @@ class Launcher:
 		common.shutdown = False
 		self.__lock_db = threading.Lock()
 		self.__monitor_thr = threading.Thread(target=self.monitor_thr)
+		self.__monitor_thr.daemon = True
 		self.__monitor_thr.start()
 
 	def monitor_thr(self):

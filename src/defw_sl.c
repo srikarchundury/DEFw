@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <strings.h>
+#include <libgen.h>
 #include <sys/time.h>
 #include <sys/socket.h>
 #include "defw_listener.h"
@@ -132,13 +133,20 @@ defw_rc_t defw_start(int argc, char *argv[])
 	char *module = NULL, *cmd = NULL;
 	defw_run_mode_t shell;
 	char **local_argv;
+	char *bin_name;
 	bool spawned = false;
+	bool pure_python = false;
 
-	//signal(SIGINT, handle_interrupt);
-	/*
-	for (int i = 1; i < NSIG; i++) {
+	/* if argv[0] starts with python, then run the DEFw as a pure
+	 * python interpreter. Pass all the arguments directly to the
+	 * python interpreter. This allows applications to run within the
+	 * context of DEFw seemlessly
+	 */
+	bin_name = basename(argv[0]);
+	if (!strncmp(bin_name, "python", 6)) {
+		pure_python = true;
+		goto run_pure_python;
 	}
-	*/
 
 	local_argv = calloc(1, (argc+1)*sizeof(*local_argv));
 	memcpy(local_argv, argv, argc*sizeof(*local_argv));
@@ -189,6 +197,8 @@ defw_rc_t defw_start(int argc, char *argv[])
 		exit(DEFW_EXIT_ERR_DEAMEON_STARTUP);
 	}
 
+run_pure_python:
+
 	memset(&g_defw_cfg, 0, sizeof(g_defw_cfg));
 
 	defw_init_logging();
@@ -198,14 +208,11 @@ defw_rc_t defw_start(int argc, char *argv[])
 
 	defw_agent_init();
 
-	rc = python_init();
+	rc = python_init(bin_name);
 	if (rc) {
 		PERROR("Failed to initialize Python Module");
 		return rc;
 	}
-
-	if (g_defw_cfg.shell == EN_DEFW_RUN_INTERACTIVE)
-		shell = EN_DEFW_RUN_INTERACTIVE;
 
 	/* create the log file */
 	g_defw_cfg.out = stdout;
@@ -228,6 +235,18 @@ defw_rc_t defw_start(int argc, char *argv[])
 		PERROR("Failed to initialize listener thread");
 		return EN_DEFW_RC_ERR_THREAD_STARTUP;
 	}
+
+	if (pure_python) {
+		/* we don't need to finalize python since Py_Main() will do that */
+		rc = python_run_interpreter(argc, argv);
+		if (rc)
+			PERROR("Interprter failed to execute: %d\n", rc);
+		defw_listener_shutdown();
+		goto out;
+	}
+
+	if (g_defw_cfg.shell == EN_DEFW_RUN_INTERACTIVE)
+		shell = EN_DEFW_RUN_INTERACTIVE;
 
 	switch (shell) {
 	case EN_DEFW_RUN_INTERACTIVE:
@@ -270,6 +289,7 @@ defw_rc_t defw_start(int argc, char *argv[])
 		return EN_DEFW_RC_ERR_THREAD_STARTUP;
 	}
 
+out:
 	free(local_argv);
 	pthread_join(l_thread_id, NULL);
 

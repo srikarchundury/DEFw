@@ -55,6 +55,33 @@ defw_rc_t python_exec(char *code)
 	return EN_DEFW_RC_OK;
 }
 
+defw_rc_t python_run_interpreter(int argc, char *argv[])
+{
+	int i, rc;
+	size_t len;
+	wchar_t **wargv;
+
+	RUN_PYTHON_CMD("sys.ps1 = 'defw>>> '\n");
+	RUN_PYTHON_CMD("sys.ps2 = 'defw... '\n");
+
+	wargv = (wchar_t **)malloc(argc * sizeof(wchar_t *));
+	for (i = 0; i < argc; i++) {
+		len = strlen(argv[i]);
+		wargv[i] = (wchar_t *)malloc((len + 1) * sizeof(wchar_t));
+		mbstowcs(wargv[i], argv[i], len + 1);
+	}
+	PySys_SetArgvEx(argc, wargv, 0);
+
+	rc = Py_Main(argc, wargv);
+	//rc = Py_RunMain();
+
+	for (int i = 0; i < argc; i++)
+		free(wargv[i]);
+	free(wargv);
+
+	return (rc) ? EN_DEFW_RC_PY_SCRIPT_FAIL : EN_DEFW_RC_OK;
+}
+
 static defw_rc_t python_setup(void)
 {
 	char buf[MAX_STR_LEN * 4];
@@ -75,19 +102,7 @@ static defw_rc_t python_setup(void)
 	RUN_PYTHON_CMD("import os\n");
 	RUN_PYTHON_CMD("import sys\n");
 	RUN_PYTHON_CMD("import readline\n");
-/*
-	snprintf(buf, sizeof(buf),
-		"import sys\n"
-		"import traceback\n"
-		"def log_exception(exc_type, exc_value, exc_traceback):\n"
-		"    with open('/tmp/defwtmp', 'a') as f:\n"
-		"        f.write(f\"Exception Type: {exc_type}\\n\")\n"
-		"        f.write(f\"Exception Value: {exc_value}\\n\")\n"
-		"        f.write(\"Traceback:\\n\")\n"
-		"        f.writelines(traceback.format_exception(exc_type, exc_value, exc_traceback))\n"
-		"sys.excepthook = log_exception");
-	RUN_PYTHON_CMD(buf);
-*/
+
 	/* all other paths are figured out within python */
 	snprintf(buf, sizeof(buf),
 		"sys.path.append('.')");
@@ -308,7 +323,7 @@ static void py_connect_status(defw_rc_t status, uuid_t uuid)
  * gcc py.c -o py -I/usr/local/include/python2.7
  * -L/usr/local/lib/python2.7/config -lm -ldl -lpthread -lutil -lpython2.7
  */
-defw_rc_t python_init(void)
+defw_rc_t python_init(char *pname)
 {
 	wchar_t program[5];
 
@@ -322,7 +337,7 @@ defw_rc_t python_init(void)
 	pthread_mutex_init(&g_interactive_shell_mutex, NULL);
 	atomic_init(&g_py_gil_refcount, 0);
 
-	swprintf(program, 3, L"%hs", "defw");
+	swprintf(program, 3, L"%hs", pname);
 
 	Py_SetProgramName(program);
 

@@ -13,13 +13,21 @@ typedef struct python_thread_data_s {
  *    initialize the python interpreter
  *    It can then be run interactively or not
  */
-defw_rc_t python_init(void);
+defw_rc_t python_init(char *pname);
 
 /*
  * python_finalize
  *   Finalize the python interpreter
  */
 defw_rc_t python_finalize(void);
+
+/*
+ * python_run_interpreter
+ *	this runs the interpreter passing it whatever command line
+ *	arguments were passed to the program. The intent is to make the
+ *	DEFw look exactly like a python interpreter
+ */
+defw_rc_t python_run_interpreter(int argc, char *argv[]);
 
 /*
  * python_run_cmd_line

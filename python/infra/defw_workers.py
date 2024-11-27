@@ -165,6 +165,7 @@ class WorkerThread:
 	def __init__(self):
 		self.queue = queue.Queue()
 		self.thread = threading.Thread(target=self.handle, args=())
+		self.thread.daemon = True
 		self.thread.start()
 		self.req_db = {}
 		self.req_db_lock = threading.Lock()
@@ -216,6 +217,7 @@ class WorkerThread:
 
 	def spawn_temporary_worker(self, cb, *args, **kwargs):
 		tmp_thread = threading.Thread(target=cb, args=args, kwargs=kwargs)
+		tmp_thread.daemon = True
 		tmp_thread.start()
 
 	# This thread should never do any blocking calls
