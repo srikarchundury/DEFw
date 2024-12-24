@@ -108,7 +108,7 @@ class Launcher:
 				with self.__lock_db:
 					if pid in self.__proc_dict.keys():
 						del self.__proc_dict[pid]
-			sleep(1)
+			sleep(0.0001)
 		logging.debug("Monitor thread 2 shutdown")
 
 	def compose_remote_cmd(self, exe, env, use, modules, python_env):
@@ -147,24 +147,15 @@ class Launcher:
 		# if we're going to wait for it keep it around until we get
 		# the result
 		proc.launch()
-		with self.__lock_db:
-			self.__proc_dict[proc.getpid()] = proc
 		pid = proc.getpid()
+		with self.__lock_db:
+			self.__proc_dict[pid] = proc
 		if not wait:
 			return pid
 		psutilproc = psutil.Process(pid)
 		logging.debug(f"process running with pid {pid}. Details {psutilproc}")
 		output, error, rc = proc.get_result()
-		if rc:
-			proc.kill()
-		with self.__lock_db:
-			del self.__proc_dict[pid]
-#		while True:
-#			rc = proc.poll()
-#			if rc:
-#				output = f"complete {rc}"
-#				error = f"complete {rc}"
-#				break
+		proc.kill()
 		return output, error, rc
 
 	def kill(self, pid):
@@ -219,7 +210,7 @@ class Launcher:
 						self.__proc_dict[pid].terminate()
 						del self.__proc_dict[pid]
 						break
-			sleep(1)
+			sleep(0.0001)
 		logging.debug("launcher.blocking_wait() completed")
 
 	def query(self):
