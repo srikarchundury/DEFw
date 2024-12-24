@@ -73,7 +73,6 @@ defw_rc_t python_run_interpreter(int argc, char *argv[])
 	PySys_SetArgvEx(argc, wargv, 0);
 
 	rc = Py_Main(argc, wargv);
-	//rc = Py_RunMain();
 
 	for (int i = 0; i < argc; i++)
 		free(wargv[i]);
@@ -142,8 +141,6 @@ defw_rc_t python_run_interactive_shell(void)
 	pymain = PyImport_AddModule("__main__");
 	globals = PyModule_GetDict(pymain);
 	g_interactive_shell = PyDict_GetItemString(globals, "shell");
-	//Py_DECREF(main);
-	//Py_DECREF(globals);
 	RUN_PYTHON_CMD("shell.push('sys.ps1 = \"defw>>> \"')\n");
 	RUN_PYTHON_CMD("shell.push('sys.ps2 = \"defw... \"')\n");
 
@@ -343,8 +340,6 @@ defw_rc_t python_init(char *pname)
 
 	Py_Initialize();
 
-	PyEval_InitThreads();
-
 	return python_setup();
 }
 
@@ -397,11 +392,8 @@ python_handle_op(char *msg, defw_rc_t status, char *uuid, python_callbacks_t cb)
 {
 	defw_rc_t rc = EN_DEFW_RC_OK;
 	PyGILState_STATE gstate;
-	PyObject *py_handler;
-	PyObject *defw;
-	PyObject *str;
-	PyObject *args = NULL;
-	PyObject *result;
+	PyObject *py_handler, *defw, *pystatus, *pymsg, *pyuuid,
+		 *str, *args = NULL, *result;
 	char *func = python_callback_str[cb];
 
 	if (!g_defw_cfg.initialized)
@@ -414,19 +406,32 @@ python_handle_op(char *msg, defw_rc_t status, char *uuid, python_callbacks_t cb)
 
 	str = PyUnicode_FromString((char *)"defw_workers");
 	defw = PyImport_Import(str);
+	Py_DECREF(str);
+
 	py_handler = PyObject_GetAttrString(defw, func);
+	Py_DECREF(defw);
+
 	switch (cb) {
-	/* All strings passed to python via the CPython API are now owned
-	 * and managed by python. No need to free them.
+	/* All strings passed to python via the CPython API
+	 * are now owned and managed by python. No need to
+	 * free them.
 	 */
 	case EN_PY_CB_REQUEST:
 	case EN_PY_CB_RESPONSE:
-		args = PyTuple_Pack(2, PyUnicode_FromString(msg),
-				PyUnicode_FromString(uuid));
+		pymsg = PyUnicode_FromString(msg);
+		pyuuid = PyUnicode_FromString(uuid);
+
+		args = PyTuple_Pack(2, pymsg, pyuuid);
+		Py_DECREF(pymsg);
+		Py_DECREF(pyuuid);
 		break;
 	case EN_PY_CB_CONNECT:
-		args = PyTuple_Pack(2, PyLong_FromLong((long)status),
-				    PyUnicode_FromString(uuid));
+		pystatus = PyLong_FromLong((long)status);
+		pyuuid = PyUnicode_FromString(uuid);
+
+		args = PyTuple_Pack(2, pystatus, pyuuid);
+		Py_DECREF(pystatus);
+		Py_DECREF(pyuuid);
 		break;
 	default:
 		break;
@@ -436,6 +441,13 @@ python_handle_op(char *msg, defw_rc_t status, char *uuid, python_callbacks_t cb)
 
 	if (!result)
 		PDEBUG("%s didn't return any values", func);
+	else
+		Py_DECREF(result);
+
+	if (args)
+		Py_DECREF(args);
+
+	Py_DECREF(py_handler);
 
 	python_gil_release(gstate);
 
@@ -469,6 +481,7 @@ defw_rc_t python_handle_connect_complete(defw_rc_t status, char *uuid)
 
 void python_update_interactive_shell(void)
 {
+// TODO: Cleanup this code since it's no longer needed
 //	PyGILState_STATE gstate;
 //	PyObject *defw, *globals, *locals, *globals_copy;
 	/*
