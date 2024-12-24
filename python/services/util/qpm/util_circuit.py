@@ -1,6 +1,6 @@
 from defw_agent_info import *
 from defw_util import round_half_up, round_to_nearest_power_of_two
-import logging, os
+import logging, os, time
 
 # Maximum number of processes per node
 MAX_PPN = 8
@@ -23,16 +23,23 @@ class CircuitStates:
 	DONE = 3
 	READY = 4
 	RUNNING = 5
-	FAIL = 6
+	LAUNCHING = 6
+	RESOURCES_CONSUMED = 7
+	FAIL = 8
 
 class Circuit:
-	def __init__(self, cid, info):
+	def __init__(self, cid, info, free_res_cb):
 		self.__state = CircuitStates.UNDEF
 		self.__cid = cid
 		self.info = info
+		self.free_resources = free_res_cb
 		logging.debug(f"max_qubits supported on this circuit: {MAX_QUBITS_PP}")
 		self.setup_circuit_run_details(MAX_QUBITS_PP)
+		self.launch_time = -1
+		self.creation_time = -1
 		self.exec_time = -1
+		self.completion_time = -1
+		self.resources_consumed_time = -1
 
 	def setup_circuit_run_details(self, max_qubits):
 		# TODO: Make MPI configuration decisions based
@@ -95,22 +102,34 @@ class Circuit:
 		self.__state = state
 		return True
 
+	def set_launching(self):
+		self.launch_time = time.time()
+		return self.set_state(CircuitStates.LAUNCHING)
+
 	def set_ready(self):
+		self.creation_time = time.time()
 		return self.set_state(CircuitStates.READY)
 
 	def set_running(self):
+		self.exec_time = time.time()
 		return self.set_state(CircuitStates.RUNNING)
 
 	def set_deletion(self):
 		return self.set_state(CircuitStates.MARKED_FOR_DELETION)
 
 	def set_exec_done(self):
+		self.completion_time = time.time()
 		return self.set_state(CircuitStates.EXEC_DONE)
 
 	def set_done(self):
 		return self.set_state(CircuitStates.DONE)
 
+	def set_resources_consumed(self):
+		self.resources_consumed_time = time.time()
+		return self.set_state(CircuitStates.RESOURCES_CONSUMED)
+
 	def set_fail(self):
+		self.completion_time = time.time()
 		return self.set_state(CircuitStates.FAIL)
 
 	def can_delete(self):

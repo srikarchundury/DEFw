@@ -108,7 +108,6 @@ class QRC:
 			return {"Error": str(e)}
 
 	def check_active_tasks(self, wid):
-		logging.debug(f"check_active_tasks called 0")
 		complete = []
 		for task_info in self.worker_pool[wid]['active_tasks']:
 			logging.debug(f"check_active_tasks task_info is {task_info}")
@@ -121,14 +120,8 @@ class QRC:
 			except Exception as e:
 				raise e
 
-			# if rc == 195:
-			# 	logging.debug(f"{task_info} still in progress with rc 195?")
-			# 	continue
-
 			# at this point, it already has a return code!
 			logging.debug(f"{task_info} completed")
-			task_info['end_time'] = time.time()
-			# logging.debug(f"srikar here start_time = {task_info["start_time"]} and end_time = {task_info["end_time"]} hence time_taken = {task_info["end_time"] - task_info["start_time"]}")
 			complete.append(task_info)
 
 			circ = task_info['circ']
@@ -136,13 +129,11 @@ class QRC:
 			qasm_file = task_info['qasm_file']
 
 			if rc == 0:
-				logging.debug(f"Circuit {cid} successful")
 				logging.debug(f"self.colocated_dvm = {self.colocated_dvm}")
 				try:
 					# TODO: process this output to return properly here.
 					logging.debug(f"async stdout {stdout} ")
 					output = self.parse_result(stdout)
-					# output = stdout.decode("utf-8")
 					circ.set_exec_done()
 				except Exception as e:
 					logging.debug(f"exception = {e}")
@@ -160,7 +151,19 @@ class QRC:
 			except:
 				pass
 
-			r = {'cid': cid, 'result': output, 'rc': rc, 'time_taken': task_info['end_time'] - task_info['start_time']}
+			r = {'cid': cid,
+				 'result': output,
+				 'rc': rc,
+				 'launch_time': circ.launch_time,
+				 'creation_time': circ.creation_time,
+				 'exec_time': circ.exec_time,
+				 'completion_time': circ.completion_time,
+				 'resources_consumed_time': circ.resources_consumed_time,
+				 'cq_enqueue_time': time.time(),
+				 'cq_dequeue_time': -1 }
+
+			logging.debug(f"Circuit {cid} successful with results {r}")
+			circ.free_resources(circ)
 			with self.circuit_results_lock:
 				self.circuit_results.append(r)
 
@@ -173,96 +176,77 @@ class QRC:
 		# if one is available run it
 		# check on currently running tasks to see if any of them complete
 		# Add completed tasks to the results dictionary
-		logging.debug(f"qrc_runner 0")
 		with self.worker_pool_lock:
 			if my_id not in self.worker_pool:
 				logging.debug(f"{my_id}: A worker thread is not part of the pool")
 			my_queue = self.worker_pool[my_id]['queue']
-		logging.debug(f"qrc_runner 1")
 		logging.debug(f"starting QRC main loop for {my_id}")
 
 		while not common.qpm_shutdown:
 			logging.debug(f"qrc_runner my_queue.qsize() = {my_queue.qsize()}")
 			empty = False
 			try:
-				logging.debug(f"qrc_runner 2")
-				circ = my_queue.get(timeout = 1) # sleep
-				logging.debug(f"qrc_runner 2.5 cid = {circ.get_cid()}")
-				logging.debug(f"qrc_runner 3")
+				circ = my_queue.get(timeout = 0.001) # sleep
 				if circ == None:
-					logging.debug(f"qrc_runner 3.5")
 					common.qpm_shutdown = True
 					continue
 			except queue.Empty:
-				logging.debug(f"qrc_runner empty true")
 				empty = True
 
 
-			logging.debug(f"qrc_runner 4")
 			self.check_active_tasks(my_id)
-			logging.debug(f"qrc_runner 5")
 
 			if not empty:
 				result = None
 				pid = -1
 				try:
-					logging.debug(f"qrc_runner 6")
 					task_info = self.run_circuit_async(circ)
-					logging.debug(f"qrc_runner 7")
 				except Exception as e:
-					logging.debug(f"qrc_runner 8")
-					logging.debug(f"qrc_runner 8 result = {result}")
 					result = e
 					rc = -1
 					pass
 
 				if my_queue.qsize() < QRC.MAX_NUM_WORKER_TASKS:
-					logging.debug(f"qrc_runner 8.5")
 					with self.worker_pool_lock:
-						logging.debug(f"qrc_runner 8.6")
 						self.worker_pool[my_id]['state'] = QRC.THREAD_STATE_FREE
 
 				if result:
-					logging.debug(f"qrc_runner 9")
-					r = {'cid': circ.get_cid(), 'result': result, 'rc': rc}
+					r = {'cid': circ.get_cid(),
+						'result': result,
+						'rc': rc,
+						'launch_time': circ.launch_time,
+						'creation_time': circ.creation_time,
+						'exec_time': circ.exec_time,
+						'completion_time': circ.completion_time,
+						'resources_consumed_time': circ.resources_consumed_time,
+						'cq_enqueue_time': time.time(),
+						'cq_dequeue_time': -1}
 					logging.debug(f"Problem with circuit {cid} appending result {r}")
 					with self.circuit_results_lock:
 						self.circuit_results.append(r)
+						circ.free_resources(circ)
 						logging.debug(f"{len(self.circuit_results)} pending results")
 				else:
-					logging.debug(f"qrc_runner 9.5 appending to queue task_info = {task_info}")
 					self.worker_pool[my_id]['active_tasks'].append(task_info)
 
-		logging.debug(f"qrc_runner 10")
-
 	def read_cq(self, cid=None):
-		logging.debug(f"NWQSIM QRC read_cq called 0")
 		if cid:
-			logging.debug(f"NWQSIM QRC read_cq called 1")
 			with self.circuit_results_lock:
 				logging.debug(f"read_cq for {cid}: {len(self.circuit_results)}")
-				logging.debug(f"NWQSIM QRC read_cq called 2")
 				i = 0
 				for e in self.circuit_results:
-					logging.debug(f"NWQSIM QRC read_cq called 3")
 					if cid == e['cid']:
-						logging.debug(f"NWQSIM QRC read_cq called 4")
-						r = self.circuit.pop(i)
+						r = self.circuit_results.pop(i)
+						r['cq_dequeue_time'] = time.time()
 						return r
-					logging.debug(f"NWQSIM QRC read_cq called 5")
 					i += 1
 		else:
-			logging.debug(f"NWQSIM QRC read_cq called 6")
 			with self.circuit_results_lock:
-				logging.debug(f"NWQSIM QRC read_cq called 7")
 				logging.debug(f"read_cq for top: {len(self.circuit_results)}")
 				if len(self.circuit_results) > 0:
-					logging.debug(f"NWQSIM QRC read_cq called 8")
 					r = self.circuit_results.pop(0)
-					logging.debug(f"NWQSIM QRC read_cq called 9 {r}")
-					logging.debug(f"NWQSIM QRC read_cq called 9")
+					r['cq_dequeue_time'] = time.time()
 					return r
-			logging.debug(f"NWQSIM QRC read_cq called 10")
 		return None
 
 	def import_module_util(self):
@@ -399,7 +383,7 @@ class QRC:
 		with open(qasm_file, 'w') as f:
 			f.write(qasm_c)
 
-		circ.set_running()
+		circ.set_launching()
 		launcher = svc_launcher.Launcher()
 		logging.debug(f"Running Circuit NWQSIM --\n{qasm_c}")
 		try:
@@ -411,7 +395,7 @@ class QRC:
 			#output, error, rc = launcher.launch(cmd, env=env, wait=True)
 			logging.debug(f"Running -- {cmd} -- with pid {pid}")
 			pid = launcher.launch(cmd)
-			start_time = time.time()
+			circ.set_running()
 		except Exception as e:
 			os.remove(qasm_file)
 			logging.critical(f"Failed to launch {cmd}")
@@ -421,7 +405,6 @@ class QRC:
 		task_info['qasm_file'] = qasm_file
 		task_info['launcher'] = launcher
 		task_info['pid'] = pid
-		task_info['start_time'] = start_time
 
 		logging.debug(f"NWQSIM task info - {task_info}")
 
@@ -446,16 +429,16 @@ class QRC:
 		with open(qasm_file, 'w') as f:
 			f.write(qasm_c)
 
-		circ.set_running()
+		circ.set_launching()
 		launcher = svc_launcher.Launcher()
 		logging.debug(f"Running Circuit --\n{qasm_c}")
 
 		try:
 			cmd = self.form_cmd(circ, qasm_file)
 			logging.debug(f"Running -- {cmd}")
-			start_time = time.time()
+			circ.set_running()
 			output, error, rc = launcher.launch(cmd, wait=True)
-			end_time = time.time()
+			output = self.parse_result(output)
 			logging.debug(f"Completed -- {cmd} -- returned {rc} -- {output} -- {error}")
 		except Exception as e:
 			os.remove(qasm_file)
@@ -467,21 +450,24 @@ class QRC:
 
 		if rc == 0:
 			logging.debug(f"Circuit {cid} successful")
-			logging.debug(f"self.colocated_dvm = {self.colocated_dvm}")
-			try:
-				# nothing to do here!
-				circ.set_exec_done()
-			except Exception as e:
-				output = "{result: missing, exception: "+ f"{e}"
-			logging.debug(f"returning here done done")
-			circ.exec_time = end_time - start_time
-			return 0, self.parse_result(output)
-			# return 0, output.decode("utf-8")
+			circ.set_exec_done()
+			r = {'cid': cid,
+				 'result': output,
+				 'rc': rc,
+				 'launch_time': circ.launch_time,
+				 'creation_time': circ.creation_time,
+				 'exec_time': circ.exec_time,
+				 'completion_time': circ.completion_time,
+				 'resources_consumed_time': circ.resources_consumed_time,
+				 'cq_enqueue_time': time.time(),
+				 'cq_dequeue_time': -1 }
+			return r
 
 		circ.set_fail()
 		self.is_colocated_dvm()
 		error_str = f"Circuit failed with {rc}:{output.decode('utf8')}:" \
-				f"{error.decode('utf-8')}:dvm {self.colocated_dvm}"
+				f"{error.decode('utf-8')}:dvm {self.colocated_dvm}:" \
+				f"total run-time = {circ.exec_time - circ.completion_time}"
 		logging.debug(error_str)
 		raise DEFwExecutionError(error_str)
 
@@ -497,13 +483,11 @@ class QRC:
 					v['queue'].put(circ)
 					logging.debug(f"nwqsimqrc async_run v['queue'].qsize() = {v['queue'].qsize()}")
 					if v['queue'].qsize() >= QRC.MAX_NUM_WORKER_TASKS:
-						logging.debug(f"nwqsimqrc async_run 98")
 						v['state'] = QRC.THREAD_STATE_BUSY
-					logging.debug(f"nwqsimqrc async_run 2")
 					return cid
-				elif v['state'] == QRC.THREAD_STATE_BUSY:
-					logging.debug(f"nwqsimqrc async_run 99")
-					raise DEFwOutOfResources(f"No more resource to run {cid}")
+		# if we get here then there is no more threads to handle this
+		# request. Raise an exception and the circuit will be queued
+		raise DEFwOutOfResources(f"No more resource to run {cid}")
 
 		logging.debug(f"nwqsimqrc async_run 3")
 

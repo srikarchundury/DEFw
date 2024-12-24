@@ -12,7 +12,8 @@ qpm_shutdown = False
 class UTIL_QPM:
 	def __init__(self, qrc, max_ppn=MAX_PPN, start=True):
 		self.circuits = {}
-		self.runner_queue = queue.Queue()
+		#self.runner_queue = queue.Queue()
+		self.oor_queue = queue.Queue()
 		self.circuit_results = []
 		self.qrc = qrc
 		self.free_hosts = {}
@@ -35,7 +36,7 @@ class UTIL_QPM:
 			raise DEFwNotReady("QPM has not initialized properly")
 
 		cid = str(uuid.uuid4())
-		self.circuits[cid] = Circuit(cid, info)
+		self.circuits[cid] = Circuit(cid, info, self.free_resources_and_oor)
 		self.circuits[cid].set_ready()
 		logging.debug(f"{cid} added to circuit database")
 		return cid
@@ -94,6 +95,24 @@ class UTIL_QPM:
 		circ.info['hosts'] = consumed_res
 		logging.debug(f"Circuit consumed: {consumed_res}")
 
+	def process_oor_queue(self):
+		while True:
+			if self.oor_queue.empty():
+				break
+			# get the top of the queue without popping it in case there
+			# are no more resources.
+			cid = self.oor_queue[0]
+			circ = self.circuits[cid]
+			try:
+				self.common_run(cid)
+				# now that we have the resources for the circuit secured
+				# pop that entry off the queue.
+				cid = self.oor_queue.get(block=False)
+				self.async_run(cid, circ.common_run)
+			except DEFwOutOfResources:
+				oor_queue.put(cid)
+				break
+
 	def free_resources(self, circ):
 		res = circ.info['hosts']
 		for host in res.keys():
@@ -107,9 +126,17 @@ class UTIL_QPM:
 		logging.debug(f"Deleting circuit {cid}")
 		self.delete_circuit(cid)
 
+	def free_resources_and_oor(self, circ):
+		self.free_resources(circ)
+		# When resources are free, go through the queue and try
+		# to consume circuits from that queue until you run out of
+		# resources again.
+		self.process_oor_queue()
+
 	def common_run(self, cid):
 		circuit = self.circuits[cid]
 		self.consume_resources(circuit)
+		circuit.set_resources_consumed()
 		logging.debug(f"Running {cid}\n{circuit.info}")
 		return circuit
 
@@ -118,25 +145,29 @@ class UTIL_QPM:
 
 		if not common_run:
 			common_run = self.common_run
+		else:
+			self.common_run = common_run
 
 		if not qpm_initialized:
 			raise DEFwNotReady("QPM has not initialized properly")
 
 		circuit = common_run(cid)
 		try:
-			rc, output = self.qrc.sync_run(circuit)
+			result = self.qrc.sync_run(circuit)
 		except Exception as e:
 			self.free_resources(circuit)
 			raise e
 		self.free_resources(circuit)
-		logging.debug(f"circuit {circuit.get_cid()} completed with {rc} and output {output}")
-		return rc, output
+		logging.debug(f"circuit {circuit.get_cid()} completed with output {result}")
+		return result
 
 	def async_run(self, cid, common_run=None):
 		global qpm_initialized
 
 		if not common_run:
 			common_run = self.common_run
+		else:
+			self.common_run = common_run
 
 		if not qpm_initialized:
 			raise DEFwNotReady("QPM has not initialized properly")
@@ -145,8 +176,12 @@ class UTIL_QPM:
 
 		try:
 			self.qrc.async_run(circuit)
-		except Exception as e:
+		except DEFwOutOfResources:
+			# queue circuit on a local out of resources queue
 			self.free_resources(circuit)
+			oor_queue.put(cid)
+		except Exception as e:
+			self.free_resources_and_oor(circuit)
 			raise e
 
 	def read_cq(self, cid=None):
@@ -155,7 +190,7 @@ class UTIL_QPM:
 		if not qpm_initialized:
 			raise DEFwNotReady("QPM has not initialized properly")
 
-		r = self.qrc.read_cq()
+		r = self.qrc.read_cq(cid)
 
 		if not r:
 			if cid:
