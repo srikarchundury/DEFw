@@ -1,6 +1,6 @@
 import cdefw_global
 from defw_exception import DEFwError, DEFwDumper
-import logging, os, yaml, shutil
+import logging, os, yaml, shutil, threading
 
 DEFW_STATUS_STRING = 'IFW STATUS: '
 DEFW_STATUS_SUCCESS = 'Success'
@@ -21,6 +21,38 @@ DEFW_SCRIPT_PATHS = ['src/',
 		     'python/experiments']
 MIN_IFS_NUM_DEFAULT = 3
 g_system_shutdown = False
+# RPC statistics by endpoint. Contains Max/Min/Avg time taken for each RPC
+# which is blocking and non-blocking separately
+g_rpc_stats_blocking = {}
+g_rpc_stats_nonblocking = {}
+g_rpc_stats_lock = threading.Lock()
+
+def insert_stat_entry(key, ep, value, blocking):
+	if blocking:
+		db = g_rpc_stats_blocking
+	else:
+		db = g_rpc_stats_nonblocking
+	with g_rpc_stats_lock:
+		if key in db:
+			v = db[key]
+			if v['max'] < value:
+				v['max'] = value
+			elif v['min'] > value:
+				v['min'] = value
+			v['count'] += 1
+			v['average'] = (v['average'] * (v['count'] - 1) + value) / v['count']
+			db[key] = v
+		else:
+			db[key] = {'ep': ep, 'max': value,
+					   'min': value, 'average': value,
+					   'count': 1}
+		logging.debug(f"RPC STATS: {db}")
+
+def dump_rpc_stats():
+	logging.debug("BLOCKING RPC STATISTICS")
+	logging.debug(yaml.dump(g_rpc_stats_blocking))
+	logging.debug("NON-BLOCKING RPC STATISTICS")
+	logging.debug(yaml.dump(g_rpc_stats_nonblocking))
 
 def get_rpc_rsp_base():
 	return {'rpc': {'dst': None, 'src': None, 'type': 'results', 'rc': None}}
@@ -34,6 +66,7 @@ global_class_db = {}
 
 def system_shutdown():
 	global g_system_shutdown
+	dump_rpc_stats()
 	logging.debug("System Shutting down")
 	g_system_shutdown = True
 
