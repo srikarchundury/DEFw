@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <fcntl.h>
 #include "defw.h"
 
 #define OUT_LOG_NAME "defw_out.log"
@@ -29,12 +30,14 @@ static inline void defw_log_print(int loglevel, bool error, char *color1,
 	va_list args;
 	FILE *print = stderr;
 
+	pthread_spin_lock(&g_defw_cfg.log_lock);
+
 	if (g_defw_cfg.loglevel == EN_LOG_LEVEL_MSG &&
 	    loglevel != EN_LOG_LEVEL_MSG)
-		return;
+		goto out;
 
 	if (g_defw_cfg.loglevel < loglevel)
-		return;
+		goto out;
 
 	if (!g_defw_cfg.outlog || !g_defw_cfg.out)
 		goto print_err;
@@ -53,7 +56,6 @@ print_err:
 			debugtimestr[di] = '\0';
 	}
 
-	pthread_spin_lock(&g_defw_cfg.log_lock);
 	fprintf(print, "%s%lu %s %s:%s:%d " RESET "%s- ", color1,
 		pthread_self(), (error) ? "ERROR" : "", debugtimestr, file, line, color2);
 	va_start(args, fmt);
@@ -61,6 +63,7 @@ print_err:
 	va_end(args);
 	fprintf(print, RESET"\n");
 	fflush(print);
+out:
 	pthread_spin_unlock(&g_defw_cfg.log_lock);
 }
 

@@ -39,6 +39,11 @@ void set_defw_path(char *path)
 	strncpy(g_defw_cfg.defw_path, path, MAX_STR_LEN);
 }
 
+void set_defw_safe_shutdown(int safe)
+{
+	g_defw_cfg.safe_shutdown = safe;
+}
+
 char *get_py_path(void)
 {
 	return g_defw_cfg.py_path;

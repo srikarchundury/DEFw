@@ -29,6 +29,7 @@ void set_defw_results_file_path(char *path);
 void set_defw_cfg_file_path(char *path);
 void set_defw_tmp_dir(char *path);
 void set_defw_initialized(int initialized);
+void set_defw_safe_shutdown(int safe);
 
 char *get_defw_path(void);
 char *get_py_path(void);

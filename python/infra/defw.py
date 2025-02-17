@@ -25,6 +25,7 @@ client_agents = None
 service_agents = None
 active_client_agents = None
 active_service_agents = None
+defw_config_yaml = None
 me = None
 resmgr = None
 updater_thread = None
@@ -686,8 +687,6 @@ class Suites(MethodInterceptor):
 		self.suites_path = path
 		self.__disabled_methods = disabled_methods
 		self.suite_prefix = suite_prefix
-		if not os.path.isdir(self.suites_path):
-			raise DEFwError('No tests suites directory: ' + self.suites_path + ' global path: ' + defw_path)
 		self.generate_test_db(self.test_db)
 
 	def __getitem__(self, key):
@@ -719,13 +718,14 @@ class Suites(MethodInterceptor):
 		# Make a dictionary of each of these. The provided path
 		# is one level hierarchy. Each directory suite should start
 		# with self.suite_prefix
-		for subdir, dirs, files in os.walk(self.suites_path):
-			break
-		for d in dirs:
-			if d.startswith(self.suite_prefix):
-				name = d.replace(suite_prefix, '')
-				db[name] = ASuite(self.suites_path, d, self.__prefix,
-								  self.__disabled_methods)
+		for path in self.suites_path:
+			for subdir, dirs, files in os.walk(path):
+				break
+			for d in dirs:
+				if d.startswith(self.suite_prefix):
+					name = d.replace(suite_prefix, '')
+					db[name] = ASuite(path, d, self.__prefix,
+									self.__disabled_methods)
 
 		self.max = len(self.test_db)
 
@@ -780,12 +780,10 @@ class Suites(MethodInterceptor):
 
 	def finalize(self):
 		for k, v in self.test_db.items():
-			v.uninitialize()
-
-class ICPASuites(Suites):
-	def __init__(self):
-		super().__init__(os.path.join(defw_path, "python", "service-apis"), prefix="api_",
-			disabled_methods=['initialize'])
+			try:
+				v.uninitialize()
+			except:
+				pass
 
 class ServiceSuitesBase(Suites):
 	def __init__(self, path, prefix="", disabled_methods=[], noload_resmgr=True, suite_prefix='suite_'):
@@ -798,49 +796,84 @@ class ServiceSuitesBase(Suites):
 		# Make a dictionary of each of these. The provided path
 		# is one level hierarchy. Each directory suite should start
 		# with self.suite_prefix
-		i = 0
-		for subdir, dirs, files in os.walk(self.suites_path):
-			break
-		import_path = os.path.split(subdir)[1]
-		for d in dirs:
-			#import the directory as a package
-			if d.startswith(self.suite_prefix):
-				name = d.replace(self.suite_prefix, '')
-				mod_path = import_path+"."+d
-				if noinit_load and d in noinit_load:
-					sys.path.append(mod_path)
-					continue
-				if only_load and d not in only_load and name != 'resmgr':
-					continue
-				# TODO for now disable loading the resmgr if you're not
-				# the resmgr. is there a better way of handling this?
-				if not me.is_resmgr() and name == 'resmgr' and self.noload_resmgr:
-					continue
-				#mod = __import__(import_path)
-				mod = importlib.import_module(mod_path)
-				importlib.reload(mod)
-				i += 1
-				mname = mod.svc_info['name']
-				db[mname] = mod
-				db[mname].initialize()
+		for path in self.suites_path:
+			for subdir, dirs, files in os.walk(path):
+				break
+			import_path = os.path.split(subdir)[1]
+			for d in dirs:
+				#import the directory as a package
+				if d.startswith(self.suite_prefix):
+					name = d.replace(self.suite_prefix, '')
+					if import_path:
+						mod_path = import_path+"."+d
+					else:
+						mod_path = d
+					if noinit_load and d in noinit_load:
+						sys.path.append(mod_path)
+						continue
+					if only_load and d not in only_load and name != 'resmgr':
+						continue
+					# TODO for now disable loading the resmgr if you're not
+					# the resmgr. is there a better way of handling this?
+					if not me.is_resmgr() and name == 'resmgr' and self.noload_resmgr:
+						continue
+					#mod = __import__(import_path)
+					mod = importlib.import_module(mod_path)
+					importlib.reload(mod)
+					mname = mod.svc_info['name']
+					db[mname] = mod
+					try:
+						db[mname].initialize()
+					except:
+						pass
 
 		self.max = len(self.test_db)
 
 class ServiceSuites(ServiceSuitesBase):
 	def __init__(self):
-		super().__init__(os.path.join(defw_path, "python", "services"),
+		global defw_config_yaml
+
+		paths = []
+		paths.append(os.path.join(defw_path, "python", "services"))
+		try:
+			v = defw_config_yaml['defw']['external-services']
+			paths += v.split(':')
+			setup_external_paths(paths)
+		except:
+			pass
+		super().__init__(paths,
 						 prefix="svc_", disabled_methods=['run', 'edit'],
 						 suite_prefix="svc_")
 
 class ServiceSuiteAPIs(ServiceSuitesBase):
 	def __init__(self):
-		super().__init__(os.path.join(defw_path, "python", "service-apis"),
+		global defw_config_yaml
+
+		paths = []
+		paths.append(os.path.join(defw_path, "python", "service-apis"))
+		try:
+			v = defw_config_yaml['defw']['external-service-apis']
+			paths += v.split(':')
+			setup_external_paths(paths)
+		except:
+			pass
+		super().__init__(paths,
 						 prefix="api_", disabled_methods=['run', 'edit'],
 						 noload_resmgr=False, suite_prefix="api_")
 
 class ExpSuites(Suites):
 	def __init__(self):
-		super().__init__(os.path.join(defw_path, "python", "experiments"), prefix="exp_",
+		global defw_config_yaml
+
+		paths = []
+		paths.append(os.path.join(defw_path, "python", "experiments"))
+		try:
+			v = defw_config_yaml['defw']['external-experiments']
+			paths += v.split(':')
+			setup_external_paths(paths)
+		except:
+			pass
+		super().__init__(paths, prefix="exp_",
 						 suite_prefix='exp_')
 
 import builtins
@@ -1053,6 +1086,13 @@ def dumpGlobalTestResults(fname=None, status=None, desc=None):
 	else:
 		print(yaml.dump(results, Dumper=DEFwDumper, indent=2, sort_keys=False))
 
+def setup_external_paths(paths):
+	global defw_tmp_dir
+
+	for p in paths:
+		if p not in sys.path:
+			sys.path.append(p)
+
 def setup_paths():
 	global defw_tmp_dir
 
@@ -1133,6 +1173,7 @@ def configure_defw():
 	global defw_path
 	global only_load
 	global noinit_load
+	global defw_config_yaml
 
 	if 'DEFW_DISABLE_RESMGR' in os.environ and \
 		os.environ['DEFW_DISABLE_RESMGR'].upper() == 'YES':
@@ -1163,6 +1204,7 @@ def configure_defw():
 		with open(config, "r") as f:
 			cy = yaml.load(f, Loader=yaml.FullLoader)
 			resolve_environment_vars(cy)
+			defw_config_yaml = cy
 			cdefw_global.set_defw_path(cy['defw']['path'])
 			if not cdefw_global.resmgr_disabled():
 				cdefw_global.set_parent_name(cy['defw']['parent-name'])
@@ -1223,30 +1265,45 @@ def configure_defw():
 					cdefw_global.set_log_level(EN_LOG_LEVEL_ERROR)
 			except:
 				cdefw_global.set_log_level(EN_LOG_LEVEL_ERROR)
+			try:
+				if cy['defw']['shutdown'] == 'SAFE':
+					cdefw_global.set_defw_safe_shutdown(True)
+				else:
+					cdefw_global.set_defw_safe_shutdown(False)
+			except:
+				cdefw_global.set_defw_safe_shutdown(False)
+				pass
 	else:
 		raise DEFwError('Failed to find a configuration (%s) file. Aborting' % config)
 
 	return cy
 
-def get_spec_agent(target, agent_dict):
-	agidx = target.get_id()
-	if agidx in agent_dict and \
-		target.remote_uuid == agent_dict[agidx].get_remote_uuid() and \
-		(target.blk_uuid ==  agent_agents[agidx].get_blk_uuid() or \
-		 target.blk_uuid == str(uuid.UUID(int=0))):
-		return agent_dict[agidx]
-	return None
+def dump_all_agents():
+	agents = [active_service_agents, service_agents, active_client_agents,
+			  client_agents]
+	for agent_dict in agents:
+		agent_dict.dump()
 
 def get_agent(target):
 	agents = [active_service_agents, service_agents, active_client_agents,
 			  client_agents]
 	for agent_dict in agents:
+		agent_dict.reload()
 		agidx = target.get_id()
+		#print(f"Attempting to find "\
+		#	  f"{agidx}:{agidx in agent_dict} ")
+		#if agidx in agent_dict:
+			#print(f"target id: {target.remote_uuid} " \
+			#	  f"agent id: {agent_dict[agidx].get_remote_uuid()} " \
+			#	  f"target blkuuid: {target.blk_uuid} " \
+			#	  f"agent blkuuid: {agent_dict[agidx].get_blk_uuid()}")
 		if agidx in agent_dict and \
 		   target.remote_uuid == agent_dict[agidx].get_remote_uuid() and \
 		   (target.blk_uuid ==  agent_dict[agidx].get_blk_uuid() or \
 			target.blk_uuid == str(uuid.UUID(int=0))):
+			#print(f"Returning {agidx}:{agent_dict[agidx]}")
 			return agent_dict[agidx]
+	#print(f"get_agent didn't find {target}")
 	return None
 
 def updater_thread():

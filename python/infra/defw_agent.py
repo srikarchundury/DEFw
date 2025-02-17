@@ -3,7 +3,7 @@ from cdefw_agent import *
 from defw_common_def import *
 from defw_exception import *
 import yaml, logging, sys, ctypes, uuid
-import ipaddress, traceback, time
+import ipaddress, traceback, time, threading
 
 class Endpoint:
 	def __init__(self, addr, port, listen_port, pid, name, hostname,
@@ -65,6 +65,7 @@ class Endpoint:
 		return nt
 
 	def dump(self):
+		logging.debug(yaml.dump(self.get(), sort_keys=False))
 		print(yaml.dump(self.get(), sort_keys=False))
 
 class Agent:
@@ -167,6 +168,7 @@ class DEFwAgents:
 		self.get_agent_cb = get_agent_cb
 		self.max = 0
 		self.n = 0
+		self.__dict_lock = threading.Lock()
 		self.reload()
 
 	def __iter__(self):
@@ -174,44 +176,52 @@ class DEFwAgents:
 		return self
 
 	def __contains__(self, item):
-		return item in self.agent_dict
+		with self.__dict_lock:
+			return item in self.agent_dict
 
 	# needed for python 3.x
 	def __next__(self):
-		if self.n < self.max:
-			key = list(self.agent_dict.keys())[self.n]
-			agent = self.agent_dict[key]
-			self.n += 1
-			return key, agent
-		else:
-			raise StopIteration
+		with self.__dict_lock:
+			if self.n < self.max:
+				key = list(self.agent_dict.keys())[self.n]
+				agent = self.agent_dict[key]
+				self.n += 1
+				return key, agent
+			else:
+				raise StopIteration
 
 	def __getitem__(self, key):
-		try:
-			rc = self.agent_dict[key]
-		except:
-			raise DEFwError('no entry for', key)
-		return rc
+		with self.__dict_lock:
+			try:
+				rc = self.agent_dict[key]
+			except:
+				raise DEFwError('no entry for', key)
+			return rc
 
 	def __setitem__(self, endpoint):
-		if endpoint.name not in self.agent_dict.keys():
-			self.connect(endpoint)
+		with self.__dict_lock:
+			if endpoint.name not in self.agent_dict.keys():
+				self.connect(endpoint)
 
 	def items(self):
-		return [(key, self.agent_dict[key]) for key in self.agent_dict]
+		with self.__dict_lock:
+			return [(key, self.agent_dict[key]) for key in self.agent_dict]
 
 	def keys(self):
 		self.reload()
-		return list(self.agent_dict.keys())
+		with self.__dict_lock:
+			return list(self.agent_dict.keys())
 
 	def values(self):
 		self.reload()
-		return list(self.agent_dict.values())
+		with self.__dict_lock:
+			return list(self.agent_dict.values())
 
 	def get_agent(self, endpoint):
 		self.reload()
 		for name, agent in self.agent_dict.items():
 			ag_ep = agent.get_ep()
+			logging.debug(f"Comparing {ag_ep} with {endpoint}")
 			if ag_ep == endpoint:
 				return agent
 		return None
@@ -228,52 +238,71 @@ class DEFwAgents:
 		self.reload()
 
 	def get_key_by_name(self, name):
-		for k, v in self.agent_dict.items():
-			if v.get_name() == name:
-				return k
+		with self.__dict_lock:
+			for k, v in self.agent_dict.items():
+				if v.get_name() == name:
+					return k
 		return ''
 
 	def reload(self):
-		self.agent_dict = {}
-		self.max = 0
-		agent = None
-		defw_lock_agent_lists()
-		try:
-			while True:
-				agent = self.get_agent_cb(agent)
-				if not agent:
-					break
-				if agent:
-					remote_uuid, blk_uuid = defw_get_agent_uuid(agent)
-					ep = Endpoint(defw_agent_ip2str(agent),
-							defw_agent_get_port(agent),
-							defw_agent_get_listen_port(agent),
-							defw_agent_get_pid(agent),
-							agent.name,
-							agent.hostname,
-							agent.node_type,
-							remote_uuid,
-							blk_uuid = blk_uuid)
-					if agent.name not in self.agent_dict:
-						self.max += 1
-					self.agent_dict[ep.get_id()] = Agent(ep)
-					logging.debug(f"Found Agent:\n{ep}")
-					defw_release_agent_blk_unlocked(agent, False)
-		except:
-			pass
-		defw_release_agent_lists()
+		with self.__dict_lock:
+			self.max = 0
+			agent = None
+			defw_lock_agent_lists()
+			try:
+				while True:
+					agent = self.get_agent_cb(agent)
+					if not agent:
+						break
+					if agent:
+						remote_uuid, blk_uuid = defw_get_agent_uuid(agent)
+						ep = Endpoint(defw_agent_ip2str(agent),
+								defw_agent_get_port(agent),
+								defw_agent_get_listen_port(agent),
+								defw_agent_get_pid(agent),
+								agent.name,
+								agent.hostname,
+								agent.node_type,
+								remote_uuid,
+								blk_uuid = blk_uuid)
+						if agent.name not in self.agent_dict:
+							self.max += 1
+						self.agent_dict[ep.get_id()] = Agent(ep)
+						logging.debug(f"Found Agent:\n{ep}")
+						defw_release_agent_blk_unlocked(agent, False)
+			except:
+				pass
+			defw_release_agent_lists()
+
+	def get_spec_agent(self, ep):
+		self.reload()
+		agidx = ep.get_id()
+		with self.__dict_lock:
+			if agidx in self.agent_dict and \
+				ep.remote_uuid == self.agent_dict[agidx].get_remote_uuid() and \
+				(ep.blk_uuid ==  self.agent_agents[agidx].get_blk_uuid() or \
+				ep.blk_uuid == str(uuid.UUID(int=0))):
+				return self.agent_dict[agidx]
+		return None
+
+	def get_num_connected_agents(self):
+		self.reload()
+		with self.__dict_lock:
+			return len(self.agent_dict)
 
 	def get_resmgr(self):
 		self.reload()
-		for name, agent in self.agent_dict.items():
-			if agent.is_resmgr():
-				return agent.get_ep()
+		with self.__dict_lock:
+			for name, agent in self.agent_dict.items():
+				if agent.is_resmgr():
+					return agent.get_ep()
 
 	# always update the dictionary for the following two operations
 	def dump(self):
-		self.reload()
-		for k, v in self.agent_dict.items():
-			v.dump()
+		#self.reload()
+		with self.__dict_lock:
+			for k, v in self.agent_dict.items():
+				v.dump()
 
 	def enable_hb_check(self):
 		defw_agent_enable_hb()

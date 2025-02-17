@@ -2,8 +2,8 @@ import defw_agent
 import cdefw_global
 from defw_exception import DEFwError, DEFwAgentNotFound
 from defw_common_def import load_pref
-from defw import me, get_agent
-import uuid
+from defw import me, get_agent, dump_all_agents
+import uuid, logging
 
 class BaseRemote(object):
 	# the idea of the *args and **kwargs in the __init__ method is for subclasses
@@ -33,6 +33,9 @@ class BaseRemote(object):
 			return
 
 		if not self.__agent:
+			print(f"agent not found {target}. Dumping all agents")
+			dump_all_agents()
+			print("End of agent dump")
 			raise DEFwAgentNotFound(f"agent not found {target}")
 
 		if service_info:

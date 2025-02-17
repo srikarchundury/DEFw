@@ -27,7 +27,61 @@ class DEFwResMgr(BaseRemote):
 	Raises:
 		DEFwCommError: If Resource Manager is not reachable
 	"""
-	def register_client(self, client_ep):
+	def register_agent(self, client_ep):
+		pass
+
+	"""
+	return true only when all of the expected agents are connected
+
+	Args:
+		None
+
+	Return:
+		None
+
+	Raises:
+		DEFwInProgress: If the number of indicated processes hadn't connected yet
+		DEFwInternalError: If the number of expected agents is not configured
+	"""
+	def ready_agents(self):
+		pass
+
+	"""
+	Wait for all the expected agents to connect
+
+	Args:
+		timeout [optional]: timeout to wait for agents to connect
+
+	Return:
+		None
+
+	Raises:
+		DEFwCommError: if timeout expires
+		DEFwInProgress: If the number of indicated processes hadn't connected yet
+		DEFwInternalError: If the number of expected agents is not configured
+	"""
+	def wait_agents(self, timeout=10):
+		pass
+
+	"""
+	Retrieve the context information the agents registered
+
+	Args:
+		None
+
+	Return:
+		None
+
+	Raises:
+		DEFwNotFound: If the number of contexts doesn't match number of registered agents
+	"""
+	def get_agents_context(self):
+		pass
+
+	def deregister_agent(self, ep):
+		pass
+
+	def wait_agents_deregistration(self, timeout = 10):
 		pass
 
 	"""

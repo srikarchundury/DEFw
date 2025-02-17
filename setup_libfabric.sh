@@ -11,5 +11,5 @@ export DEFW_PARENT_NAME=resmgr
 export DEFW_SHELL_TYPE=interative
 export DEFW_LOG_LEVEL=all
 export DEFW_LOG_DIR=/tmp/${DEFW_AGENT_NAME}
-export DEFW_ONLY_LOAD_MODULE=svc_resmgr
+export DEFW_ONLY_LOAD_MODULE=svc_resmgr,svc_libfabric
 export DEFW_EXTERNAL_SERVICES_PATH=/sw/crusher/ums/ompix/DEVELOP/source/libfabric-amir/python/

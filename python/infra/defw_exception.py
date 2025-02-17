@@ -105,6 +105,10 @@ class DEFwOutOfResources(DEFwError):
 	def __init__(self, msg='', arg=None, halt=False, nname=cdefw_global.get_node_name()):
 		super().__init__(msg, arg, halt, nname)
 
+class DEFwOperationFailure(DEFwError):
+	def __init__(self, msg='', arg=None, halt=False, nname=cdefw_global.get_node_name()):
+		super().__init__(msg, arg, halt, nname)
+
 def defw_error_representer(dumper, data):
 	mapping = {'node-name': data.node_name, 'msg': data.msg, 'arg': data.arg, 'halt': data.halt, 'filename': data.filename,
 		   'lineno': data.lineno, 'function': data.function, 'code_context': data.code_context,

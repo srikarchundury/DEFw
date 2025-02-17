@@ -19,9 +19,12 @@ class BaseAgentAPI(BaseRemote):
 				if defw.me.is_resmgr():
 					svcs.append(defw.resmgr.query())
 				continue
-			for c in module.service_classes:
-				obj = c(start=False)
-				svcs.append(obj.query())
+			try:
+				for c in module.service_classes:
+					obj = c(start=False)
+					svcs.append(obj.query())
+			except:
+				pass
 		return svcs
 
 	'''
