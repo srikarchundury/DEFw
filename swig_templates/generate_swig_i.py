@@ -16,7 +16,6 @@ def gen_intf(file):
         if "%}" in c:
             break
 
-    #typemap_path = sys.argv[1] + '/lustre/tests/lutf/swig_templates/typemap.template'
     typemap_path = os.path.join(path, 'typemap.template')
     with open(typemap_path, 'r') as i_typemap:
         l_typemap = i_typemap.readlines()

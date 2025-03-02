@@ -176,7 +176,7 @@ defw_rc_t python_run_telnet_server(void)
 	 */
 	PDEBUG("Running in Daemon mode");
 	sprintf(buf, "fname = os.path.join('%s', '%s')\n",
-		g_defw_cfg.tmp_dir ? : "/tmp", TEL_SRV_LOG);
+		g_defw_cfg.tmp_dir[0] != '\0' ? g_defw_cfg.tmp_dir : "/tmp", TEL_SRV_LOG);
 	RUN_PYTHON_CMD(buf);
 
 	sprintf(buf, "logfile = open(fname, 'w')\n");

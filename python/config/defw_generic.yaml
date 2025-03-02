@@ -11,4 +11,7 @@ defw:
     path: ${DEFW_PATH}
     tmp: ${DEFW_LOG_DIR}
     loglevel: ${DEFW_LOG_LEVEL}
-
+    external-services: ${DEFW_EXTERNAL_SERVICES_PATH}
+    external-service-apis: ${DEFW_EXTERNAL_SERVICE_APIS_PATH}
+    external-experiments: ${DEFW_EXTERNAL_EXPERIMENTS_PATH}
+    expected-agent-count: ${DEFW_EXPECTED_AGENT_COUNT}

@@ -132,10 +132,14 @@ defw_rc_t defw_start(int argc, char *argv[])
 	defw_rc_t rc;
 	char *module = NULL, *cmd = NULL;
 	defw_run_mode_t shell;
-	char **local_argv;
+	char **local_argv = NULL;
 	char *bin_name;
 	bool spawned = false;
 	bool pure_python = false;
+
+	memset(&g_defw_cfg, 0, sizeof(g_defw_cfg));
+
+	defw_init_logging();
 
 	/* if argv[0] starts with python, then run the DEFw as a pure
 	 * python interpreter. Pass all the arguments directly to the
@@ -198,10 +202,6 @@ defw_rc_t defw_start(int argc, char *argv[])
 	}
 
 run_pure_python:
-
-	memset(&g_defw_cfg, 0, sizeof(g_defw_cfg));
-
-	defw_init_logging();
 
 	/* generate global uuid for this instance */
 	uuid_generate(g_defw_cfg.uuid);
@@ -290,12 +290,19 @@ run_pure_python:
 	}
 
 out:
-	free(local_argv);
-	pthread_join(l_thread_id, NULL);
+	if (local_argv)
+		free(local_argv);
+	if (g_defw_cfg.safe_shutdown)
+		pthread_join(l_thread_id, NULL);
 
 	PDEBUG("%d: Exiting Framework\n", getpid());
 
+	pthread_spin_lock(&g_defw_cfg.log_lock);
 	fclose(g_defw_cfg.out);
+	g_defw_cfg.out = NULL;
+	free(g_defw_cfg.outlog);
+	g_defw_cfg.outlog = NULL;
+	pthread_spin_unlock(&g_defw_cfg.log_lock);
 
 	return EN_DEFW_RC_OK;
 }
