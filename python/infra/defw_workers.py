@@ -407,8 +407,8 @@ class WorkerThread:
 						   blk_uuid=blk_uuid, msg=rc_yaml, blocking=False)
 		rc = send_rsp(wr)
 		if rpc_type == 'method_call':
-			logging.logging(f"handling request for {class_name}.{method_name} took " \
-							f"{time.time() - start_rep_req_handle}")
+			logging.debug(f"handling request for {class_name}.{method_name} took " \
+						  f"{time.time() - start_rep_req_handle}")
 		return rc
 
 worker_thread = WorkerThread()
