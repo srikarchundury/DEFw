@@ -3,7 +3,7 @@ import cdefw_global
 from defw_exception import DEFwError, DEFwAgentNotFound
 from defw_common_def import load_pref
 from defw import me, get_agent, dump_all_agents
-import uuid, logging
+import uuid, logging, time
 
 class BaseRemote(object):
 	# the idea of the *args and **kwargs in the __init__ method is for subclasses
@@ -58,6 +58,7 @@ class BaseRemote(object):
 					#     self.target
 					#     attr.__name__ = name of method
 					#     type(self).__name__ = name of class
+					start = time.time()
 					result = self.__agent.send_req('method_call',
 								me.my_endpoint(),
 								self.__service_module,
@@ -66,6 +67,7 @@ class BaseRemote(object):
 								self.__class_id,
 								self.__blocking,
 								*args, **kwargs)
+					logging.debug(f"Time taken in {attr.__name__} is {time.time() - start}")
 				else:
 					result = attr(*args, **kwargs)
 				return result

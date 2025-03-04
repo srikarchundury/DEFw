@@ -125,7 +125,7 @@ def populate_rpc_rsp(src, dst, rc, exception=None):
 	rpc['rpc']['rc'] = rc
 	return rpc
 
-GLOBAL_PREF_DEF = {'editor': shutil.which('vim'), 'loglevel': 'debug',
+GLOBAL_PREF_DEF = {'editor': shutil.which('vim'), 'loglevel': 'critical',
 		   'halt_on_exception': False, 'remote copy': False,
 		   'RPC timeout': 300, 'num_intfs': MIN_IFS_NUM_DEFAULT,
 		   'cmd verbosity': True}

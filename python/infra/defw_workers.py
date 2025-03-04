@@ -293,6 +293,8 @@ class WorkerThread:
 		method_name = ''
 		rc = {}
 
+		start_rep_req_handle = time.time()
+
 		logging.debug("Calling handle_rpc_type")
 
 		# check to see if this is for me
@@ -372,8 +374,10 @@ class WorkerThread:
 				if type(instance).__name__ != class_name:
 					raise DEFwError(f"requested class {class_name}, "  \
 								   f"but id refers to class {type(instance).__name__}")
-				logging.debug(f'remote call to method call {class_name}.{method_name}')
+				start = time.time()
 				rc = getattr(instance, method_name)(*args, **kwargs)
+				logging.debug(f'remote call to method call {class_name}.{method_name} took '\
+							  f'{time.time() - start}')
 		except Exception as e:
 			# NOTE: I can just send the exception as is to the other end, however,
 			# it won't have a backtrace. I put the back trace in the DEFwError representation
@@ -402,6 +406,9 @@ class WorkerThread:
 						   remote_uuid=source.remote_uuid,
 						   blk_uuid=blk_uuid, msg=rc_yaml, blocking=False)
 		rc = send_rsp(wr)
+		if rpc_type == 'method_call':
+			logging.logging(f"handling request for {class_name}.{method_name} took " \
+							f"{time.time() - start_rep_req_handle}")
 		return rc
 
 worker_thread = WorkerThread()
@@ -459,7 +466,8 @@ def send_req(wr):
 					  yaml.dump(wr.msg))
 
 	if rc:
-		raise DEFwCommError(f"Sending failed with {defw_rc2str(rc)}")
+		raise DEFwCommError(f"Sending failed with {defw_rc2str(rc)}, " \
+							f"{wr.remote_uuid}, {wr.blk_uuid}")
 
 	if wr.blocking:
 		return wr.wait()
