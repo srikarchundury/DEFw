@@ -5,6 +5,7 @@ import logging, uuid, time, queue, threading, logging, yaml
 from defw_exception import DEFwError, DEFwNotReady, DEFwInProgress
 import os
 from .util_circuit import Circuit, MAX_PPN
+from statistics import mean, median, stdev
 
 qpm_initialized = False
 qpm_shutdown = False
@@ -19,6 +20,7 @@ class UTIL_QPM:
 		self.free_hosts = {}
 		self.max_ppn = max_ppn
 		self.setup_host_resources(max_ppn)
+		self.all_results = []
 
 	def setup_host_resources(self, max_ppn):
 		hl = expand_host_list(os.environ['QFW_QPM_ASSIGNED_HOSTS'])
@@ -217,6 +219,7 @@ class UTIL_QPM:
 			else:
 				raise DEFwInProgress("No ready QTs")
 
+		self.all_results.append(r)
 		return r
 
 	def peek_cq(self, cid=None):
@@ -278,8 +281,29 @@ class UTIL_QPM:
 		time.sleep(timeout)
 		me.exit()
 
+	def compute_stats(self, data, label):
+		logging.critical(f"Statistical Analysis for {label}:")
+		logging.critical(f"Count: {len(data)}")
+		logging.critical(f"Mean: {mean(data):.6f} seconds")
+		logging.critical(f"Median: {median(data):.6f} seconds")
+		logging.critical(f"Standard Deviation: {stdev(data):.6f} seconds" if len(data) > 1 else "N/A")
+		logging.critical(f"Min: {min(data):.6f} seconds")
+		logging.critical(f"Max: {max(data):.6f} seconds")
+
 	def shutdown(self):
 		logging.debug("Scheduling QPM Shutdown")
+		create_launch = []
+		launch_running = []
+		exec_completion = []
+		for r in self.all_results:
+			create_launch.append(r['launch_time'] - r['creation_time'])
+			launch_running.append(r['exec_time'] - r['launch_time'])
+			exec_completion.append(r['completion_time'] - r['exec_time'])
+
+		self.compute_stats(create_launch, 'create->launch')
+		self.compute_stats(launch_running, 'launch->running')
+		self.compute_stats(exec_completion, 'exec->completion')
+
 		if self.qrc:
 			self.qrc.shutdown()
 			self.qrc = None
