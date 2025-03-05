@@ -29,11 +29,7 @@ class Process:
 		return f"Process(pid={self.__pid}, {self.__process}, env={self.__appended_env})"
 
 	def launch(self):
-#		cmd = " ".join(self.__cmd)
 		try:
-#			self.__process = subprocess.Popen(cmd, env=self.__env,
-#							stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-#							stdin=subprocess.PIPE, shell=True, start_new_session=False)
 			self.__process = subprocess.Popen(self.__cmd, env=self.__env,
 							stdout=subprocess.PIPE, stderr=subprocess.PIPE,
 							stdin=subprocess.PIPE, start_new_session=True)
@@ -45,13 +41,6 @@ class Process:
 
 	def get_result(self):
 		output, error = self.__process.communicate()
-#		while True:
-#			output += self.__process.stdout.readline()
-#			logging.debug(f"Got output: {output}")
-#			if output == b'' and self.__process.poll() is not None:
-#				break
-#		error = self.__process.stderr.read()
-
 		return output, error, self.__process.returncode
 
 	def kill(self):
@@ -109,12 +98,9 @@ class Launcher:
 					if pid in self.__proc_dict.keys():
 						del self.__proc_dict[pid]
 			sleep(0.0001)
-		logging.debug("Monitor thread 2 shutdown")
+		logging.debug("Monitor thread shutdown")
 
 	def compose_remote_cmd(self, exe, env, use, modules, python_env):
-		# Start the DVM on the second node in the Simulation Environment
-		# because currently MPI can not co-exist on the DVM's head node.
-		# Our launcher will live on node 0
 		cmd = ''
 		if env:
 			cmd = "; ".join([f"export {var_name}={var_value}" \
