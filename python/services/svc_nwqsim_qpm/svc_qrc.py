@@ -55,9 +55,9 @@ class QRC(UTIL_QRC):
 				hosts += ','
 			hosts += f"{k}:{v}"
 
-		if self.colocated_dvm:
+		try:
 			dvm = info["qfw_dvm_uri_path"]
-		else:
+		except:
 			dvm = "search"
 		exec_cmd = shutil.which(info["exec"])
 
