@@ -42,16 +42,22 @@ class DEFwResMgr:
 		self.__reload_resources(query=True)
 
 	def __grab_agent_info(self, agent_dict, db, skip_self=False, query=True):
+		agent_dict.dump()
 		for k, agent in agent_dict.items():
 			ep = agent.get_ep()
+			logging.debug(f"examining -- {ep}\nself: {self.__my_ep}")
 			if ep == self.__my_ep and skip_self:
 				continue
-			client_api = BaseAgentAPI(target=ep)
+			logging.debug(f"Getting client ep for {ep.get_id()}")
+			try:
+				client_api = BaseAgentAPI(target=ep)
+			except:
+				logging.debug(f"Agent with bad EP: {ep.get_id()}")
+				continue
 			aname = ep.get_id()
 			svc_info = []
 			if query:
 				svc_info = client_api.query()
-			logging.debug(f"examining -- {aname}")
 			with self.__db_lock:
 				if aname in db:
 					logging.debug(f"{aname} is already in the {db}")

@@ -2,9 +2,10 @@ from defw_agent_info import *
 from defw_util import prformat, fg, bg
 from defw import me
 import logging, uuid, time, queue, threading, sys, os, io, contextlib
-import importlib, yaml
+import importlib, yaml, psutil
 from defw_exception import DEFwError, DEFwExists, DEFwExecutionError, DEFwInProgress, DEFwOutOfResources
 import svc_launcher, cdefw_global
+from defw_util import print_thread_stack_trace_to_logger
 
 sys.path.append(os.path.split(os.path.abspath(__file__))[0])
 import qpm_common as common
@@ -40,6 +41,8 @@ class QRC:
 	THREAD_STATE_BUSY = 1
 
 	def __init__(self, start=True):
+		common.qpm_shutdown = False
+		print_thread_stack_trace_to_logger(level='critical')
 		logging.debug(f"NWQSIM_QRC INIT")
 		self.circuit_results_lock = threading.Lock()
 		self.worker_pool_lock = threading.Lock()
@@ -47,24 +50,27 @@ class QRC:
 		self.module_util = None
 		self.colocated_dvm = False
 		self.is_colocated_dvm()
-		self.worker_pool = {}
+		self.worker_pool = []
+		self.worker_pool_rr = 0
+		self.num_cores = psutil.cpu_count(logical=False)
+		logging.debug(f'num_cores = {self.num_cores} start = {start}')
 		if start:
 			for x in range(0, QRC.MAX_NUM_WORKERS):
 				with self.worker_pool_lock:
 					runner = threading.Thread(target=self.runner, args=(x,))
 					logging.debug(f"inserting {x} in the worker pool")
-					self.worker_pool[x] = {'thread': runner,
+					self.worker_pool.append({'thread': runner,
 										   'active_tasks': [],
 										   'queue': queue.Queue(),
-										   'state': QRC.THREAD_STATE_FREE}
+										   'state': QRC.THREAD_STATE_FREE})
 					runner.daemon = True
 					runner.start()
 
 	def __del__(self):
-		logging.debug(f"NWQSIM_QRC DEL")
+		logging.critical(f"NWQSIM_QRC DEL")
 		common.qpm_shutdown = True
 		with self.worker_pool_lock:
-			for k, v in self.worker_pool.items():
+			for v in self.worker_pool:
 				v['queue'].put(None)
 
 	def is_colocated_dvm(self):
@@ -176,11 +182,28 @@ class QRC:
 		# if one is available run it
 		# check on currently running tasks to see if any of them complete
 		# Add completed tasks to the results dictionary
+		super_affinity = os.sched_getaffinity(0)
 		with self.worker_pool_lock:
-			if my_id not in self.worker_pool:
-				logging.debug(f"{my_id}: A worker thread is not part of the pool")
 			my_queue = self.worker_pool[my_id]['queue']
-		logging.debug(f"starting QRC main loop for {my_id}")
+			# bind to core
+			# We can enhance this more to avoid core 0 in every l3 cache
+			bound_core = (my_id + 1) % self.num_cores
+			if not bound_core in super_affinity:
+				tmp = bound_core + 1
+				while tmp != bound_core:
+					if tmp in super_affinity:
+						bound_core = tmp
+						break
+					tmp  = (tmp + 1) % len(super_affinity)
+			logging.debug(f'attempting to bind {threading.get_ident()} to ' \
+					f'{bound_core} from  {os.sched_getaffinity(0)}')
+			try:
+				os.sched_setaffinity(0, {bound_core})
+			except Exception as e:
+				logging.critical(f'Failed to bind {threading.get_ident()} to {bound_core}')
+				raise e
+
+		logging.debug(f"starting QRC main loop for {my_id}: {common.qpm_shutdown}")
 
 		while not common.qpm_shutdown:
 			logging.debug(f"qrc_runner my_queue.qsize() = {my_queue.qsize()}")
@@ -192,7 +215,6 @@ class QRC:
 					continue
 			except queue.Empty:
 				empty = True
-
 
 			self.check_active_tasks(my_id)
 
@@ -373,7 +395,7 @@ class QRC:
 		if "SLINGSHOT_VNIS" in os.environ:
 			logging.debug(f"Found SLINGSHOT_VNIS: {os.environ['SLINGSHOT_VNIS']}")
 		else:
-			logging.critical(f"Didn't find SLINGSHOT_VNIS")
+			logging.debug(f"Didn't find SLINGSHOT_VNIS")
 
 		cid = circ.get_cid()
 
@@ -397,7 +419,7 @@ class QRC:
 			pid = -1
 			#env = {'FI_LOG_LEVEL': 'info'}
 			#output, error, rc = launcher.launch(cmd, env=env, wait=True)
-			logging.debug(f"Running -- {cmd} -- with pid {pid}")
+			#logging.critical(f"Running -- {cmd} -- with pid {pid}")
 			pid = launcher.launch(cmd)
 			circ.set_running()
 		except Exception as e:
@@ -419,7 +441,7 @@ class QRC:
 		if "SLINGSHOT_VNIS" in os.environ:
 			logging.debug(f"Found SLINGSHOT_VNIS: {os.environ['SLINGSHOT_VNIS']}")
 		else:
-			logging.critical(f"Didn't find SLINGSHOT_VNIS")
+			logging.debug(f"Didn't find SLINGSHOT_VNIS")
 
 		#self.load_modules(circ.info["modules"])
 
@@ -479,23 +501,32 @@ class QRC:
 		logging.debug(f"sync_run({circ.get_cid()}, {circ.info})")
 		return self.run_circuit(circ)
 
+	# Round robin over the workers so that they are all busy
 	def async_run(self, circ):
 		cid = circ.get_cid()
+		rr = self.worker_pool_rr
+		self.worker_pool_rr += 1
+		idx = rr % QRC.MAX_NUM_WORKERS
+		i = idx
 		with self.worker_pool_lock:
-			for k, v in self.worker_pool.items():
-				if v['state'] == QRC.THREAD_STATE_FREE and v['queue'].qsize() < QRC.MAX_NUM_WORKER_TASKS:
-					v['queue'].put(circ)
-					logging.debug(f"nwqsimqrc async_run v['queue'].qsize() = {v['queue'].qsize()}")
-					if v['queue'].qsize() >= QRC.MAX_NUM_WORKER_TASKS:
-						v['state'] = QRC.THREAD_STATE_BUSY
-					return cid
+			while True:
+				worker = self.worker_pool[i]
+				if worker['state'] == QRC.THREAD_STATE_FREE and \
+				   worker['queue'].qsize() < QRC.MAX_NUM_WORKER_TASKS:
+						worker['queue'].put(circ)
+						if worker['queue'].qsize() >= QRC.MAX_NUM_WORKER_TASKS:
+							worker['state'] = QRC.THREAD_STATE_BUSY
+						return cid
+				else:
+					i = (i + 1) % QRC.MAX_NUM_WORKERS
+					if i == idx:
+						break
 		# if we get here then there is no more threads to handle this
 		# request. Raise an exception and the circuit will be queued
 		raise DEFwOutOfResources(f"No more resource to run {cid}")
 
-		logging.debug(f"nwqsimqrc async_run 3")
-
 	def shutdown(self):
+		logging.critical("shutdown called")
 		common.qpm_shutdown = True
 
 	def test(self):

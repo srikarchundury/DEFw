@@ -4,7 +4,7 @@ from util.qpm.util_qpm import UTIL_QPM
 
 class QPM(UTIL_QPM):
 	def __init__(self, start=True):
-		super().__init__(QRC(), start=start)
+		super().__init__(QRC(start=start), start=start)
 
 	def query(self):
 		from . import SERVICE_NAME, SERVICE_DESC
