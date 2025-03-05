@@ -159,26 +159,12 @@ def get_thread_names():
 		thread_names[thread.ident] = thread.name
 	return thread_names
 
-def print_thread_stack_trace_to_logger(thread_id):
-	# Redirect stderr to a StringIO object
-	temp_stderr = io.StringIO()
-	sys.stderr = temp_stderr
-
-	# Print stack trace to temporary stderr
-	traceback.print_stack(frame)
-
-	# Get stack trace from StringIO object
-	stack_trace = temp_stderr.getvalue()
-
-	# Get thread name
-	thread_name = get_thread_names().get(thread_id, "Unknown Thread")
-
-	# Log the stack trace with thread name
-	logging.critical(f"Thread Name: {thread_name}, ID: {thread_id}\n{stack_trace}")
-
-	# Reset stderr
-	temp_stderr.close()
-	sys.stderr = sys.__stderr__
+def print_thread_stack_trace_to_logger(level='debug'):
+	stack_trace_str = "".join(traceback.format_stack())
+	if level == 'critical':
+		logging.critical(f"{stack_trace_str}")
+	else:
+		logging.debug(f"{stack_trace_str}")
 
 def print_all_thread_stack_traces_to_logger():
 	frames = sys._current_frames()

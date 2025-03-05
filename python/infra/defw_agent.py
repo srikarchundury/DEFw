@@ -66,7 +66,7 @@ class Endpoint:
 
 	def dump(self):
 		logging.debug(yaml.dump(self.get(), sort_keys=False))
-		print(yaml.dump(self.get(), sort_keys=False))
+		#print(yaml.dump(self.get(), sort_keys=False))
 
 class Agent:
 	def __init__(self, endpoint):
