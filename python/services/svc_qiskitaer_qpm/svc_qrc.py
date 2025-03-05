@@ -312,8 +312,8 @@ class QRC:
 		cmd = f'{exec_cmd} --dvm {dvm} -x LD_LIBRARY_PATH ' \
 			  f'--mca btl ^tcp,ofi,vader,openib ' \
 			  f'--mca pml ^ucx --mca mtl ofi --mca opal_common_ofi_provider_include '\
-			  f'{info["provider"]} --bind-to core '\
-			  f'--np {info["np"]} --host {hosts} -v {qiskitaer_executable} ' \
+			  f'{info["provider"]} --map-by {info["mapping"]} --bind-to core '\
+			  f'--np {info["np"]} --host {hosts} {gpuwrapper} -v {qiskitaer_executable} ' \
 			  f'-q {qasm_file} '
 
 		# cmd = f'{exec_cmd} --dvm {dvm} -x LD_LIBRARY_PATH ' \

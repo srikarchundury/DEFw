@@ -16,7 +16,7 @@ class QPM(UTIL_QPM):
 		return info
 
 	def create_circuit(self, info):
-		info['qfw_backend'] = 'circuit_runner.nwqsim'
+		info['qfw_backend'] = 'circuit_runner.nwqsim_latest'
 		return super().create_circuit(info)
 
 	def test(self):
