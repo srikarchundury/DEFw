@@ -45,8 +45,6 @@ class Process:
 
 	def kill(self):
 		logging.debug(f"Kill process with pid: {self.__pid}")
-		stack_trace_str = "".join(traceback.format_stack())
-		logging.debug(f"{stack_trace_str}")
 		self.__process.kill()
 		try:
 			os.waitpid(self.__pid, 0)
@@ -74,20 +72,17 @@ class Launcher:
 	def __init__(self, start=False):
 		self.__proc_dict = {}
 		self.__dead_procs = {}
-		common.shutdown = False
+		self.__shutdown = False
 		self.__lock_db = threading.Lock()
 		self.__monitor_thr = threading.Thread(target=self.monitor_thr)
 		self.__monitor_thr.daemon = True
 		self.__monitor_thr.start()
 
 	def monitor_thr(self):
-		logging.debug(f"Starting monitor_thr {common.shutdown}")
-		while not common.shutdown:
-			logging.debug("monitor_thr started")
+		while not self.__shutdown:
 			with self.__lock_db:
 				for pid, proc in self.__proc_dict.items():
 					exists = psutil.pid_exists(pid)
-					logging.debug(f"Examining -- {pid}:{proc}:{exists}:{proc.poll()}")
 					if proc.poll() is not None:
 						logging.debug(f"{pid} terminated with rc {proc.returncode()}")
 						stdout, stderr, rc = proc.get_result()
@@ -126,7 +121,6 @@ class Launcher:
 			   target=None, muse='', modules='', python_env=''):
 		logging.debug(f"Starting {cmd} on {target}")
 		if target and target != socket.gethostname():
-			logging.debug(f"run_cmd_on_target {cmd} on {target}")
 			self.run_cmd_on_target(cmd, env, muse, modules, python_env, target)
 			return 0
 		proc = Process(cmd, env, path)
@@ -139,7 +133,6 @@ class Launcher:
 		if not wait:
 			return pid
 		psutilproc = psutil.Process(pid)
-		logging.debug(f"process running with pid {pid}. Details {psutilproc}")
 		output, error, rc = proc.get_result()
 		proc.kill()
 		return output, error, rc
@@ -173,12 +166,10 @@ class Launcher:
 				for pid in rm_pid:
 					del self.__proc_dict[pid]
 		logging.debug("Launcher Service shutdown requested")
-		common.shutdown = True
-		self.__monitor_thr.join()
+		self.__shutdown = True
 
 	def blocking_wait(self, pid=-1):
 		while True:
-			logging.debug(f"Waiting on pid {pid}")
 			with self.__lock_db:
 				if pid == -1:
 					if len(self.__proc_dict) == 0:
@@ -192,12 +183,10 @@ class Launcher:
 				else:
 					if pid in self.__proc_dict.keys() and \
 					self.__proc_dict[pid].poll():
-						logging.debug(f"PID {pid} exited")
 						self.__proc_dict[pid].terminate()
 						del self.__proc_dict[pid]
 						break
 			sleep(0.0001)
-		logging.debug("launcher.blocking_wait() completed")
 
 	def query(self):
 		from . import svc_info

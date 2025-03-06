@@ -219,8 +219,9 @@ class UTIL_QRC:
 			task_info = {}
 			pid = launcher.launch(cmd)
 			logging.debug(f"Running -- {cmd} -- with pid {pid}")
-			circ.set_running()
+			circ.set_running(launcher)
 		except Exception as e:
+			launcher.shutdown()
 			os.remove(qasm_file)
 			logging.critical(f"Failed to launch {cmd}")
 			raise e
@@ -248,11 +249,12 @@ class UTIL_QRC:
 		cmd = self.form_cmd(circ, qasm_file)
 		try:
 			logging.debug(f"Running -- {cmd}")
-			circ.set_running()
+			circ.set_running(launcher)
 			output, error, rc = launcher.launch(cmd, wait=True)
 			output = self.parse_result(output)
 			logging.debug(f"Completed -- {cmd} -- returned {rc} -- {output} -- {error}")
 		except Exception as e:
+			launcher.shutdown()
 			os.remove(qasm_file)
 			logging.critical(f"Failed to launch {cmd}")
 			raise e
