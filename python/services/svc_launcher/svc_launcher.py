@@ -88,8 +88,7 @@ class Launcher:
 						stdout, stderr, rc = proc.get_result()
 						proc.kill()
 						self.__dead_procs[pid] = (stdout, stderr, rc)
-			for pid in self.__dead_procs.keys():
-				with self.__lock_db:
+				for pid in self.__dead_procs.keys():
 					if pid in self.__proc_dict.keys():
 						del self.__proc_dict[pid]
 			sleep(0.0001)
@@ -150,10 +149,11 @@ class Launcher:
 				del self.__proc_dict[pid]
 
 	def status(self, pid):
-		if pid in self.__dead_procs.keys():
-			rc = self.__dead_procs[pid]
-			del self.__dead_procs[pid]
-			return rc
+		with self.__lock_db:
+			if pid in self.__dead_procs.keys():
+				rc = self.__dead_procs[pid]
+				del self.__dead_procs[pid]
+				return rc
 		raise DEFwInProgress(f"{pid} is still running")
 
 	def shutdown(self, keep=False):

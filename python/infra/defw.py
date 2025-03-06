@@ -976,7 +976,6 @@ class Myself:
 		#from defw_telnet_sr import g_tns
 		#if g_tns:
 		#	g_tns.stop()
-		logging.critical("shutdown the telnet server. about to exit")
 		_original_exit()
 
 	def get_cpuinfo(self):

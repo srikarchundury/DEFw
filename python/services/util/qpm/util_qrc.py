@@ -28,6 +28,7 @@ class UTIL_QRC:
 		self.num_cores = psutil.cpu_count(logical=False)
 		logging.debug(f'num_cores = {self.num_cores} start = {start}')
 		if start:
+			self.launcher = svc_launcher.Launcher()
 			for x in range(0, self.num_workers):
 				with self.worker_pool_lock:
 					runner = threading.Thread(target=self.runner, args=(x,))
@@ -50,7 +51,8 @@ class UTIL_QRC:
 		complete = []
 		for task_info in self.worker_pool[wid]['active_tasks']:
 			try:
-				stdout, stderr, rc = task_info['launcher'].status(task_info['pid'])
+				#stdout, stderr, rc = task_info['launcher'].status(task_info['pid'])
+				stdout, stderr, rc = self.launcher.status(task_info['pid'])
 			except DEFwInProgress:
 				continue
 			except Exception as e:
@@ -213,22 +215,19 @@ class UTIL_QRC:
 			f.write(qasm_c)
 
 		circ.set_launching()
-		launcher = svc_launcher.Launcher()
 		cmd = self.form_cmd(circ, qasm_file)
 		try:
 			task_info = {}
-			pid = launcher.launch(cmd)
+			pid = self.launcher.launch(cmd)
 			logging.debug(f"Running -- {cmd} -- with pid {pid}")
-			circ.set_running(launcher)
+			circ.set_running()
 		except Exception as e:
-			launcher.shutdown()
 			os.remove(qasm_file)
 			logging.critical(f"Failed to launch {cmd}")
 			raise e
 
 		task_info['circ'] = circ
 		task_info['qasm_file'] = qasm_file
-		task_info['launcher'] = launcher
 		task_info['pid'] = pid
 
 		return task_info
@@ -249,9 +248,10 @@ class UTIL_QRC:
 		cmd = self.form_cmd(circ, qasm_file)
 		try:
 			logging.debug(f"Running -- {cmd}")
-			circ.set_running(launcher)
+			circ.set_running()
 			output, error, rc = launcher.launch(cmd, wait=True)
 			output = self.parse_result(output)
+			launcher.shutdown()
 			logging.debug(f"Completed -- {cmd} -- returned {rc} -- {output} -- {error}")
 		except Exception as e:
 			launcher.shutdown()
@@ -311,5 +311,6 @@ class UTIL_QRC:
 
 	def shutdown(self):
 		logging.critical("shutdown called")
+		self.launcher.shutdown()
 		self.shutdown_workers = True
 

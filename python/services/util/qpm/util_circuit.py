@@ -110,9 +110,8 @@ class Circuit:
 		self.creation_time = time.time()
 		return self.set_state(CircuitStates.READY)
 
-	def set_running(self, launcher):
+	def set_running(self):
 		self.exec_time = time.time()
-		self.launcher = launcher
 		return self.set_state(CircuitStates.RUNNING)
 
 	def set_deletion(self):
@@ -120,7 +119,6 @@ class Circuit:
 
 	def set_exec_done(self):
 		self.completion_time = time.time()
-		self.launcher.shutdown()
 		return self.set_state(CircuitStates.EXEC_DONE)
 
 	def set_done(self):
@@ -132,7 +130,6 @@ class Circuit:
 
 	def set_fail(self):
 		self.completion_time = time.time()
-		self.launcher.shutdown()
 		return self.set_state(CircuitStates.FAIL)
 
 	def can_delete(self):
