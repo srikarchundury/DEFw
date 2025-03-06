@@ -271,6 +271,9 @@ class UTIL_QPM:
 		logging.debug(f"{client_ep} reserved the {svc}")
 
 	def release(self, services=None):
+		global qpm_shutdown
+
+		qpm_shutdown = True
 		if self.qrc:
 			self.qrc.shutdown()
 			self.qrc = None
@@ -300,9 +303,12 @@ class UTIL_QPM:
 			launch_running.append(r['exec_time'] - r['launch_time'])
 			exec_completion.append(r['completion_time'] - r['exec_time'])
 
-		self.compute_stats(create_launch, 'create->launch')
-		self.compute_stats(launch_running, 'launch->running')
-		self.compute_stats(exec_completion, 'exec->completion')
+		try:
+			self.compute_stats(create_launch, 'create->launch')
+			self.compute_stats(launch_running, 'launch->running')
+			self.compute_stats(exec_completion, 'exec->completion')
+		except:
+			pass
 
 		if self.qrc:
 			self.qrc.shutdown()

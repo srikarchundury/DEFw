@@ -8,6 +8,15 @@ from util.qpm.util_qrc import UTIL_QRC
 
 sys.path.append(os.path.split(os.path.abspath(__file__))[0])
 
+# Custom loader to force all keys to be strings
+class StringKeyLoader(yaml.SafeLoader):
+	pass
+
+def string_key_constructor(loader, node):
+	return loader.construct_scalar(node)
+
+StringKeyLoader.add_constructor("tag:yaml.org,2002:int", string_key_constructor)
+
 class QRC(UTIL_QRC):
 	def __init__(self, start=True):
 		super().__init__(start=start)
@@ -18,22 +27,20 @@ class QRC(UTIL_QRC):
 			try:
 				stdout, stderr, rc = task_info['launcher'].status(task_info['pid'])
 			except DEFwInProgress:
-				logging.debug(f"{task_info} still in progress")
 				continue
 			except Exception as e:
 				raise e
-			logging.debug(f"{task_info} completed")
 			complete.append(task_info)
 			circ = task_info['circ']
 			cid = circ.get_cid()
 			qasm_file = task_info['qasm_file']
 			if not rc:
-				logging.debug(f"Circuit {cid} successful")
 				try:
-					output_file = qasm_file+".result.r0"
+					output_file = qasm_file+".result"
 					with open(output_file, 'r') as f:
 						output = f.read()
-						output = yaml.safe_load(output)
+						output = yaml.load(output, Loader=StringKeyLoader)
+						#output = yaml.safe_load(output)
 					os.remove(output_file)
 					circ.set_exec_done()
 				except Exception as e:
@@ -71,47 +78,15 @@ class QRC(UTIL_QRC):
 		import shutil
 
 		info = circ.info
-
-		logging.debug(f"Circuit Info = {info}")
-
-		if 'qpm_options' not in info or 'compiler' not in info["qpm_options"]:
-			compiler = 'staq'
-		else:
-			compiler = info["qpm_options"]["compiler"]
-
 		circuit_runner = shutil.which(info['qfw_backend'])
-		gpuwrapper = shutil.which("gpuwrapper.sh")
 
-		if not circuit_runner or not gpuwrapper:
-			logging.debug(f"{os.environ['PATH']}")
-			logging.debug(f"{os.environ['LD_LIBRARY_PATH']}")
-			raise DEFwExecutionError("Couldn't find circuit_runner or gpuwrapper. Check paths")
+		if not circuit_runner:
+			raise DEFwExecutionError("Couldn't find circuit_runner. Check paths")
 
-		if not os.path.exists(info["qfw_dvm_uri_path"].split('file:')[1]):
-			raise DEFwExecutionError(f"dvm-uri {info['qfw_dvm_uri_path']} doesn't exist")
-
-		hosts = ''
-		for k, v in info["hosts"].items():
-			if hosts:
-				hosts += ','
-			hosts += f"{k}:{v}"
-
-		try:
-			dvm = info["qfw_dvm_uri_path"]
-		except:
-			dvm = "search"
-
-		exec_cmd = shutil.which(info["exec"])
-
-		cmd = f'{exec_cmd} --dvm {dvm} -x LD_LIBRARY_PATH ' \
-			  f'--mca btl ^tcp,ofi,vader,openib ' \
-			  f'--mca pml ^ucx --mca mtl ofi --mca opal_common_ofi_provider_include '\
-			  f'{info["provider"]} --map-by {info["mapping"]} --bind-to core '\
-			  f'--np {info["np"]} --host {hosts} {gpuwrapper} -v {circuit_runner} ' \
-			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]} ' \
-			  f'-c {compiler}'
+		cmd = f'{circuit_runner} -u {info["vqpu_url"]} ' \
+			  f'-q {qasm_file} -b {info["num_qubits"]} -s {info["num_shots"]}'
 
 		return cmd
 
 	def test(self):
-		return "****Testing the TNQVM QRC****"
+		return "****Testing the QB QRC****"
