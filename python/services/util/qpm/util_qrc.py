@@ -1,3 +1,4 @@
+from api_events import Event
 from defw_agent_info import *
 from defw_util import prformat, fg, bg
 from defw import me
@@ -20,6 +21,7 @@ class UTIL_QRC:
 		self.circuit_results_lock = threading.Lock()
 		self.worker_pool_lock = threading.Lock()
 		self.circuit_results = []
+		self.push_info = {}
 		self.module_util = None
 		self.worker_pool = []
 		self.worker_pool_rr = 0
@@ -97,8 +99,14 @@ class UTIL_QRC:
 				 'cq_dequeue_time': -1 }
 
 			circ.free_resources(circ)
-			with self.circuit_results_lock:
-				self.circuit_results.append(r)
+
+			# push the result if push info were registered:
+			if self.push_info:
+				event = Event(self.push_info['evtype'], r)
+				self.push_info['class'].push(event)
+			else:
+				with self.circuit_results_lock:
+					self.circuit_results.append(r)
 
 		for task_info in complete:
 			self.worker_pool[wid]['active_tasks'].remove(task_info)
@@ -308,6 +316,9 @@ class UTIL_QRC:
 		# if we get here then there is no more threads to handle this
 		# request. Raise an exception and the circuit will be queued
 		raise DEFwOutOfResources(f"No more resource to run {cid}")
+
+	def register_event_notification(self, info):
+		self.push_info = info
 
 	def shutdown(self):
 		logging.critical("shutdown called")

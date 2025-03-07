@@ -9,7 +9,9 @@ class BaseRemote(object):
 	# the idea of the *args and **kwargs in the __init__ method is for subclasses
 	# to pass all their arguments to the super() class. Then the superclass can then pass
 	# that to the remote, so the remote class can be instantiated appropriately
-	def __init__(self, service_info=None, blocking=True, target=None, *args, **kwargs):
+	def __init__(self, class_id=None, service_info=None,
+				 blocking=True, target=None, *args, **kwargs):
+		self.__own = True
 		# if a target is specified other than me then we're going
 		# to execute on that target
 		self.__blocking = blocking
@@ -33,9 +35,6 @@ class BaseRemote(object):
 			return
 
 		if not self.__agent:
-			print(f"agent not found {target}. Dumping all agents")
-			dump_all_agents()
-			print("End of agent dump")
 			raise DEFwAgentNotFound(f"agent not found {target}")
 
 		if service_info:
@@ -43,11 +42,19 @@ class BaseRemote(object):
 		elif target:
 			self.__service_module = type(self).__module__
 
-		self.__class_id = str(uuid.uuid1())
-		self.__agent.send_req('instantiate_class', me.my_endpoint(),
-				self.__service_module,
-				type(self).__name__, '__init__',
-				self.__class_id, self.__blocking, *args, **kwargs)
+		# if we're provided a class_id, it means that an instance already
+		# exists and we don't need to create one. So just store the
+		# class_id for future reference.
+		if class_id:
+			self.__own = False
+			logging.critical(f"Class owned by remote: {class_id}")
+			self.__class_id = class_id
+		else:
+			self.__class_id = str(uuid.uuid1())
+			self.__agent.send_req('instantiate_class', me.my_endpoint(),
+					self.__service_module,
+					type(self).__name__, '__init__',
+					self.__class_id, self.__blocking, *args, **kwargs)
 
 	def __getattribute__(self, name):
 		attr = object.__getattribute__(self, name)
@@ -77,6 +84,8 @@ class BaseRemote(object):
 
 	def __del__(self):
 		try:
+			if not self.__own:
+				return
 			# signal to the remote that the class is being destroyed
 			if self.__remote:
 				self.__agent.send_req('destroy_class', me.my_endpoint(),
