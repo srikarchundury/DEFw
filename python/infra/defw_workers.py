@@ -363,7 +363,7 @@ class WorkerThread:
 						instance = common.get_class_from_db(class_id)
 					except:
 						my_class = getattr(module, class_name)
-						# TODO: Instantiating a class can result in a blockinh
+						# TODO: Instantiating a class can result in a blocking
 						# call
 						instance = my_class(*args, **kwargs)
 						common.add_to_class_db(instance, class_id)
