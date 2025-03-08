@@ -37,7 +37,6 @@ class Endpoint:
 		return self.node_type == EN_DEFW_RESMGR
 
 	def get_id(self):
-		#return f"{self.name}-{self.addr}:{self.port}-{self.pid}"
 		return self.remote_uuid
 
 	def get(self):
@@ -131,13 +130,8 @@ class Agent:
 									   blocking=blocking)
 		y = defw_workers.send_req(wr)
 
-		if not blocking:
-			insert_stat_entry(self.__endpoint.remote_uuid, self.__endpoint,
-							  time.time() - start, False)
-			return 0
-
-		insert_stat_entry(self.__endpoint.remote_uuid, self.__endpoint,
-							time.time() - start, True)
+		g_rpc_metrics.add_rpc_rsp_time(y['rpc']['statistics']['send_time'],
+										 time.time())
 
 		target = y['rpc']['dst']
 		if not target == src:

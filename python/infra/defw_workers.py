@@ -10,6 +10,9 @@ from defw import client_agents, service_agents, \
 from defw_util import print_thread_stack_trace_to_logger
 import defw
 
+from collections import deque
+import time
+
 class WorkerEvent:
 	EVENT_INCOMING_REQUEST = 1
 	EVENT_INCOMING_RESPONSE = 2
@@ -297,6 +300,9 @@ class WorkerThread:
 
 		logging.debug("Calling handle_rpc_type")
 
+		common.g_rpc_metrics.add_rpc_req_time(y['rpc']['statistics']['send_time'],
+								   time.time())
+
 		# check to see if this is for me
 		target = y['rpc']['dst']
 		if not target == me.my_endpoint():
@@ -357,7 +363,7 @@ class WorkerThread:
 						instance = common.get_class_from_db(class_id)
 					except:
 						my_class = getattr(module, class_name)
-						# TODO: Instantiating a class can result in a blockinh
+						# TODO: Instantiating a class can result in a blocking
 						# call
 						instance = my_class(*args, **kwargs)
 						common.add_to_class_db(instance, class_id)
@@ -407,8 +413,8 @@ class WorkerThread:
 						   blk_uuid=blk_uuid, msg=rc_yaml, blocking=False)
 		rc = send_rsp(wr)
 		if rpc_type == 'method_call':
-			logging.debug(f"handling request for {class_name}.{method_name} took " \
-						  f"{time.time() - start_rep_req_handle}")
+			common.g_rpc_metrics.add_method_time(start_rep_req_handle, time.time(),
+											f'{class_name}.{method_name}')
 		return rc
 
 worker_thread = WorkerThread()

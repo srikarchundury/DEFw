@@ -10,7 +10,7 @@ from defw_agent import DEFwClientAgents, DEFwServiceAgents, \
 	 DEFwActiveClientAgents, DEFwActiveServiceAgents, Endpoint
 import netifaces, random
 import atexit
-import os, subprocess, sys, yaml, fnmatch, logging, csv, uuid, io
+import os, subprocess, sys, yaml, fnmatch, logging, csv, uuid, io, signal
 import shutil, traceback, datetime, re, copy, threading, queue, time
 from defw_util import prformat, fg, bg, generate_random_string, \
 	 get_lscpu, get_today, get_now, print_all_thread_stack_traces_to_logger
@@ -962,17 +962,21 @@ class Myself:
 		'''
 		global _original_exit
 
+		common.g_rpc_metrics.dump()
 		services.finalize()
 		service_apis.finalize()
 		common.system_shutdown()
 		from defw_workers import put_shutdown
 		put_shutdown()
 		updater_thread.join()
-		logging.debug("Shutting down the DEFw")
+		logging.critical("Shutting down the DEFw")
 		print_all_thread_stack_traces_to_logger()
-		from defw_telnet_sr import g_tns
-		if g_tns:
-			g_tns.stop()
+		# if we are in the context of the telnet server, we can not tell
+		# it to stop directly, because that'll cause a deadlock. However
+		# if we call exit, everything shutsdown anyway.
+		#from defw_telnet_sr import g_tns
+		#if g_tns:
+		#	g_tns.stop()
 		_original_exit()
 
 	def get_cpuinfo(self):
@@ -1424,5 +1428,11 @@ if not cdefw_global.get_defw_initialized():
 	updater_thread.start()
 
 	builtins.exit = me.exit
+
+	def sigkill_handler(signum, frame):
+		logging.critical("DEFw received a SIGKILL")
+		me.exit()
+
+	signal.signal(signal.SIGABRT, sigkill_handler)
 
 	cdefw_global.set_defw_initialized(True)

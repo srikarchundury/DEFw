@@ -1,4 +1,5 @@
 from defw_agent_info import *
+from api_events import BaseEventAPI
 from defw_util import expand_host_list, round_half_up, round_to_nearest_power_of_two
 from defw import me
 import logging, uuid, time, queue, threading, logging, yaml
@@ -21,6 +22,7 @@ class UTIL_QPM:
 		self.max_ppn = max_ppn
 		self.setup_host_resources(max_ppn)
 		self.all_results = []
+		self.push_info = {}
 
 	def setup_host_resources(self, max_ppn):
 		hl = expand_host_list(os.environ['QFW_QPM_ASSIGNED_HOSTS'])
@@ -68,7 +70,6 @@ class UTIL_QPM:
 		# determine if we have enough hosts to run this circuit
 		# If the number of hosts required is more than the total number
 		# of hosts then we can't run the circuit.
-		#logging.critical(f"Available resources = {np}:{num_hosts}:{self.free_hosts}")
 		if num_hosts > len(self.free_hosts.keys()):
 			raise DEFwOutOfResources(f"hosts requested is more than available" \
 									 f" Available resources = {np}:{num_hosts}:{self.free_hosts}")
@@ -108,7 +109,6 @@ class UTIL_QPM:
 				# now that we have the resources for the circuit secured
 				# pop that entry off the queue.
 				cid = self.oor_queue.get(block=False)
-				#logging.critical(f"Pulled {cid} off the OOR queue")
 				self.async_run_oor(cid, self.common_run)
 			except DEFwOutOfResources:
 				break
@@ -123,7 +123,6 @@ class UTIL_QPM:
 			self.free_hosts[host] += res[host]
 		circ.set_done()
 		cid = circ.get_cid()
-		#logging.critical(f"Deleting circuit {cid}:{self.free_hosts}:{circ.info['hosts']}")
 		self.delete_circuit(cid)
 
 	def free_resources_and_oor(self, circ):
@@ -176,7 +175,6 @@ class UTIL_QPM:
 			self.qrc.async_run(circuit)
 		except DEFwOutOfResources as e:
 			# queue circuit on a local out of resources queue
-			#logging.critical(f"OOR QUEUE PUT: {cid}")
 			self.oor_queue.put(cid)
 			raise e
 		except Exception as e:
@@ -199,7 +197,6 @@ class UTIL_QPM:
 			self.qrc.async_run(circuit)
 		except DEFwOutOfResources:
 			# queue circuit on a local out of resources queue
-			#logging.critical(f"OOR QUEUE PUT: {cid}")
 			self.oor_queue.put(cid)
 		except Exception as e:
 			self.process_oor_queue()
@@ -238,13 +235,13 @@ class UTIL_QPM:
 
 		return r
 
-	def status(self, cid):
-		global qpm_initialized
-
-		if not qpm_initialized:
-			raise DEFwNotReady("QPM has not initialized properly")
-
-		return self.qrc.status(cid)
+	def register_event_notification(self, ep, evtype, class_id):
+		self.push_info['class'] = BaseEventAPI(class_id=class_id, target=ep)
+		self.push_info['evtype'] = evtype
+		# keeping the below for debugging purposes
+		self.push_info['class_id'] = class_id
+		self.push_info['target'] = ep
+		self.qrc.register_event_notification(self.push_info)
 
 	def is_ready(self):
 		global qpm_initialized
@@ -271,6 +268,9 @@ class UTIL_QPM:
 		logging.debug(f"{client_ep} reserved the {svc}")
 
 	def release(self, services=None):
+		global qpm_shutdown
+
+		qpm_shutdown = True
 		if self.qrc:
 			self.qrc.shutdown()
 			self.qrc = None
@@ -300,9 +300,12 @@ class UTIL_QPM:
 			launch_running.append(r['exec_time'] - r['launch_time'])
 			exec_completion.append(r['completion_time'] - r['exec_time'])
 
-		self.compute_stats(create_launch, 'create->launch')
-		self.compute_stats(launch_running, 'launch->running')
-		self.compute_stats(exec_completion, 'exec->completion')
+		try:
+			self.compute_stats(create_launch, 'create->launch')
+			self.compute_stats(launch_running, 'launch->running')
+			self.compute_stats(exec_completion, 'exec->completion')
+		except:
+			pass
 
 		if self.qrc:
 			self.qrc.shutdown()

@@ -1,6 +1,7 @@
 import cdefw_global
-from defw_exception import DEFwError, DEFwDumper
-import logging, os, yaml, shutil, threading
+from defw_exception import DEFwError, DEFwDumper, DEFwNotFound
+import logging, os, yaml, shutil, threading, time, sys
+from collections import deque
 
 DEFW_STATUS_STRING = 'IFW STATUS: '
 DEFW_STATUS_SUCCESS = 'Success'
@@ -23,50 +24,83 @@ MIN_IFS_NUM_DEFAULT = 3
 g_system_shutdown = False
 # RPC statistics by endpoint. Contains Max/Min/Avg time taken for each RPC
 # which is blocking and non-blocking separately
-g_rpc_stats_blocking = {}
-g_rpc_stats_nonblocking = {}
-g_rpc_stats_lock = threading.Lock()
 
-def insert_stat_entry(key, ep, value, blocking):
-	if blocking:
-		db = g_rpc_stats_blocking
-	else:
-		db = g_rpc_stats_nonblocking
-	with g_rpc_stats_lock:
-		if key in db:
-			v = db[key]
-			if v['max'] < value:
-				v['max'] = value
-			elif v['min'] > value:
-				v['min'] = value
-			v['count'] += 1
-			v['average'] = (v['average'] * (v['count'] - 1) + value) / v['count']
-			db[key] = v
-		else:
-			db[key] = {'ep': ep, 'max': value,
-					   'min': value, 'average': value,
-					   'count': 1}
-		logging.debug(f"RPC STATS: {db}")
+class RPCMetrics:
+	def __init__(self, window_size=4096):
+		self.lock = threading.Lock()
+		self.window_size = window_size
+		self.rpc_rsp_timing_db = {'window': deque(maxlen=self.window_size),
+								  'avg': 0.0, 'min': sys.maxsize, 'max': 0.0,
+								  'total': 0}
+		self.rpc_req_timing_db = {'window': deque(maxlen=self.window_size),
+								  'avg': 0.0, 'min': sys.maxsize, 'max': 0.0,
+								  'total': 0}
+		self.method_timing_db = {}
 
-def dump_rpc_stats():
-	logging.debug("BLOCKING RPC STATISTICS")
-	logging.debug(yaml.dump(g_rpc_stats_blocking))
-	logging.debug("NON-BLOCKING RPC STATISTICS")
-	logging.debug(yaml.dump(g_rpc_stats_nonblocking))
+	def add_timing_locked(self, send_time, recv_time, db):
+		rtt = recv_time - send_time
+		db['total'] += 1
+		db['window'].append(rtt)
+		window_len = len(db['window'])
+		if window_len > 0:
+			db['avg'] = sum(db['window']) / window_len
+		if rtt > db['max']:
+			db['max'] = rtt
+		if rtt < db['min']:
+			db['min'] = rtt
+
+	def add_rpc_req_time(self, send_time, recv_time):
+		with self.lock:
+			self.add_timing_locked(send_time, recv_time, self.rpc_req_timing_db)
+
+	def add_rpc_rsp_time(self, send_time, recv_time):
+		with self.lock:
+			self.add_timing_locked(send_time, recv_time, self.rpc_rsp_timing_db)
+
+	def add_method_time(self, start_time, end_time, method):
+		with self.lock:
+			if method not in self.method_timing_db:
+				self.method_timing_db[method] = {'window': deque(maxlen=self.window_size),
+												 'avg': 0.0, 'min': sys.maxsize, 'max': 0.0,
+												 'total': 0}
+			self.add_timing_locked(start_time, end_time, self.method_timing_db[method])
+
+	def dump(self):
+		import copy
+
+		reqdb = copy.deepcopy(self.rpc_req_timing_db)
+		rspdb = copy.deepcopy(self.rpc_rsp_timing_db)
+		methodb = copy.deepcopy(self.method_timing_db)
+		del(reqdb['window'])
+		del(rspdb['window'])
+		for k, v in methodb.items():
+			del(v['window'])
+		logging.critical("RPC request timing statistics")
+		logging.critical(yaml.dump(reqdb,
+						 Dumper=DEFwDumper, indent=2, sort_keys=False))
+		logging.critical("RPC response timing statistics")
+		logging.critical(yaml.dump(rspdb,
+						 Dumper=DEFwDumper, indent=2, sort_keys=False))
+		logging.critical("RPC method timing statistics")
+		logging.critical(yaml.dump(methodb,
+						 Dumper=DEFwDumper, indent=2, sort_keys=False))
+
+g_rpc_metrics = RPCMetrics()
 
 def get_rpc_rsp_base():
-	return {'rpc': {'dst': None, 'src': None, 'type': 'results', 'rc': None}}
+	return {'rpc': {'dst': None, 'src': None, 'type': 'results', 'rc': None,
+			'statistics': {'send_time': None}}}
 
 def get_rpc_req_base():
 	return {'rpc': {'src': None, 'dst': None, 'type': None, 'script': None,
 			'class': None, 'method': None, 'function': None,
-			'parameters': {'args': None, 'kwargs': None}}}
+			'parameters': {'args': None, 'kwargs': None},
+			'statistics': {'send_time': None}}}
 
 global_class_db = {}
 
 def system_shutdown():
 	global g_system_shutdown
-	dump_rpc_stats()
 	logging.debug("System Shutting down")
 	g_system_shutdown = True
 
@@ -91,9 +125,9 @@ def get_class_from_db(class_id):
 def del_entry_from_class_db(class_id):
 	if class_id in global_class_db:
 		instance = global_class_db[class_id]
-		logging.debug(f"destroying instance for {type(instance).__name__} "\
+		logging.debug(f"removing instance for {type(instance).__name__} "\
 					"with id {class_id}")
-		del(global_class_db[class_id])
+		del global_class_db[class_id]
 
 def dump_class_db():
 	for k, v in global_class_db.items():
@@ -111,6 +145,8 @@ def populate_rpc_req(src, dst, req_type, module, cname,
 	rpc['rpc']['class_id'] = class_id
 	rpc['rpc']['parameters']['args'] = args
 	rpc['rpc']['parameters']['kwargs'] = kwargs
+	rpc['rpc']['statistics']['send_time'] = time.time()
+	rpc['rpc']['statistics']['recv_time'] = 0
 	return rpc
 
 def populate_rpc_rsp(src, dst, rc, exception=None):
@@ -123,6 +159,8 @@ def populate_rpc_rsp(src, dst, rc, exception=None):
 	else:
 		rpc['rpc']['type'] = 'response'
 	rpc['rpc']['rc'] = rc
+	rpc['rpc']['statistics']['send_time'] = time.time()
+	rpc['rpc']['statistics']['recv_time'] = 0
 	return rpc
 
 GLOBAL_PREF_DEF = {'editor': shutil.which('vim'), 'loglevel': 'critical',

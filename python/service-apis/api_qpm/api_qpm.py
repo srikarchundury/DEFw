@@ -31,9 +31,6 @@ class QPM(BaseRemote):
 	def async_run(self, cid):
 		pass
 
-	def status(self, cid):
-		pass
-
 	def is_ready(self):
 		pass
 
@@ -41,6 +38,9 @@ class QPM(BaseRemote):
 		pass
 
 	def peek_cq(self, cid=None):
+		pass
+
+	def register_event_notification(self, ep, evtype, class_id):
 		pass
 
 	def test(self):
