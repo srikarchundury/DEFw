@@ -104,7 +104,7 @@ class UTIL_QRC:
 			if self.push_info:
 				event = Event(self.push_info['evtype'], r)
 				try:
-					self.push_info['class'].push(event)
+					self.push_info['class'].put(event)
 				except Exception as e:
 					logging.critical(f"Failed to push event to client. Exception encountered {e}")
 					raise e
