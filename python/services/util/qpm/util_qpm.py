@@ -35,10 +35,6 @@ class UTIL_QPM:
 
 	def create_circuit(self, info):
 		start = time.time()
-		global qpm_initialized
-
-		if not qpm_initialized:
-			raise DEFwNotReady("QPM has not initialized properly")
 
 		cid = str(uuid.uuid4())
 		self.circuits[cid] = Circuit(cid, info, self.free_resources_and_oor)
@@ -139,7 +135,7 @@ class UTIL_QPM:
 		logging.debug(f"Running {cid}\n{circuit.info}")
 		return circuit
 
-	def sync_run(self, cid, common_run=None):
+	def sync_run(self, info, common_run=None):
 		global qpm_initialized
 
 		if not common_run:
@@ -151,6 +147,7 @@ class UTIL_QPM:
 			raise DEFwNotReady("QPM has not initialized properly")
 
 		try:
+			cid = self.create_circuit(info)
 			circuit = common_run(cid)
 			result = self.qrc.sync_run(circuit)
 		except Exception as e:
@@ -181,7 +178,7 @@ class UTIL_QPM:
 			self.process_oor_queue()
 			raise e
 
-	def async_run(self, cid, common_run=None):
+	def async_run(self, info, common_run=None):
 		global qpm_initialized
 
 		if not common_run:
@@ -193,6 +190,7 @@ class UTIL_QPM:
 			raise DEFwNotReady("QPM has not initialized properly")
 
 		try:
+			cid = self.create_circuit(info)
 			circuit = common_run(cid)
 			self.qrc.async_run(circuit)
 		except DEFwOutOfResources:
@@ -201,6 +199,8 @@ class UTIL_QPM:
 		except Exception as e:
 			self.process_oor_queue()
 			raise e
+
+		return cid
 
 	def read_cq(self, cid=None):
 		global qpm_initialized

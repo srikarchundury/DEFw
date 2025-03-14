@@ -13,11 +13,11 @@ class Event:
 	def get_event(self):
 		return self.__ev
 
-# Allow the remote end to push events only
+# Allow the remote end to put events only
 class BaseEventAPI(BaseRemote):
 	def __init__(self, class_id=None, target=None, thread_safe=True, *args, **kwargs):
 		super().__init__(class_id=class_id, target=target, *args, **kwargs)
 
-	def push(self, event):
+	def put(self, event):
 		pass
 

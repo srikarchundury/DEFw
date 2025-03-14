@@ -103,7 +103,11 @@ class UTIL_QRC:
 			# push the result if push info were registered:
 			if self.push_info:
 				event = Event(self.push_info['evtype'], r)
-				self.push_info['class'].push(event)
+				try:
+					self.push_info['class'].put(event)
+				except Exception as e:
+					logging.critical(f"Failed to push event to client. Exception encountered {e}")
+					raise e
 			else:
 				with self.circuit_results_lock:
 					self.circuit_results.append(r)

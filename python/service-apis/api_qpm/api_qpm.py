@@ -19,16 +19,13 @@ class QPM(BaseRemote):
 	def __init__(self, si):
 		super().__init__(service_info = si)
 
-	def create_circuit(self, info):
-		pass
-
 	def delete_circuit(self, cid):
 		pass
 
-	def sync_run(self, cid):
+	def sync_run(self, info):
 		pass
 
-	def async_run(self, cid):
+	def async_run(self, info):
 		pass
 
 	def is_ready(self):
