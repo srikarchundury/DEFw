@@ -48,7 +48,7 @@
     if (*$1 == NULL)
        goto fail;
     obj = PyUnicode_FromString(*$1);
-#if SWIG_VERSION >= 40100
+#if SWIG_VERSION >= 0x040200
     $result = SWIG_Python_AppendOutput($result, obj, $isvoid);
 #else
     $result = SWIG_Python_AppendOutput($result, obj);
