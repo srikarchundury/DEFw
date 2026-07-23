@@ -1,7 +1,7 @@
 from defw_agent_info import *
 from defw_util import prformat, fg, bg
 from defw import me
-import os, subprocess, copy, yaml, logging, sys, threading, socket, psutil, traceback
+import os, subprocess, copy, yaml, logging, sys, threading, socket, psutil, traceback, shlex
 from time import sleep
 from defw_exception import DEFwError, DEFwInProgress
 sys.path.append(os.path.split(os.path.abspath(__file__))[0])
@@ -11,9 +11,19 @@ from defw_cmd import defw_exec_remote_cmd
 class Process:
 	def __init__(self, cmd, env, path):
 		if path:
-			self.__cmd = os.path.join(path, proc).split()
+			self.__cmd = os.path.join(path, cmd).split()
 		else:
-			self.__cmd = cmd.split()
+			# cmd is produced by util/mpi.py's build_mpi_command_string()
+			# via shlex.join(), which quotes arguments like
+			# '^tcp,ofi,vader,openib' to keep them as a single token. A
+			# naive str.split() doesn't understand that quoting and leaves
+			# the literal quote characters in the arg — invisible for
+			# backends that never call MPI_Init() (the value just sits
+			# unused in the environment), but rejected by OpenMPI's real
+			# MCA parameter parser the moment a backend actually does
+			# (e.g. qtensor/mpi4py, TNQVM/exatn), since the value then
+			# starts with a stray quote instead of the negation operator.
+			self.__cmd = shlex.split(cmd)
 		self.__pid = 0
 		self.__process = None
 		self.__appended_env = env
